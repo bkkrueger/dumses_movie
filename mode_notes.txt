@@ -1,0 +1,103 @@
+([absolute] (perturbation|contrast) [from (base|mean)]|full|base|mean) [state|profile]
+
+def parse_mode(mode):
+
+   m1, junk, m2 = mode.rpartition(" ")
+   if m2 == "state":
+      dimension = 2
+   elif m2 == "profile:
+      dimension = 1
+   else:
+      dimension = 2
+      m1 = mode
+
+   if m1 in ["full", "base", "mean"]:
+      absolute = False
+      transform = "none"
+      reference = m1
+   else:
+      if "perturbation" in m1:
+         transform = "perturb"
+         a, f = m1.split("perturbation")
+         a = a.strip()
+         f = f.strip()
+      elif "contrast" in m1:
+         transform = "contrast"
+         a, f = m1.split("contrast")
+         a = a.strip()
+         f = f.strip()
+      else:
+         raise # TODO
+
+      if a == "absolute":
+         absolute = True
+      elif a == "":
+         absolute = False
+      else:
+         raise # TODO
+
+      if f = "" or f == "from base":
+         reference == "base"
+      elif f == "from mean":
+         reference == "mean"
+      else:
+         raise # TODO
+
+   return (absolute, dimension, transform, reference)
+
+
+
+
+
+
+parser = ap.ArgumentParser(description="Parse mode")
+group1 = parser.add_mutually_exclusive_group(required=True)
+
+group2 = parser.add_mutually_exclusive_group(required=False)
+group2.add_argument("state", dest="dimension", action="store_const", const=2,
+                    default=2)
+group2.add_argument("profile", dest="dimension", action="store_const", const=1,
+                    default=2)
+
+-- mutually exclusive group (required)
+   -- transformation
+      -- absolute (optional)
+         -- dest: "absolute"
+         -- action: store True
+         -- default: False
+      -- mutually exclusive group (required)
+         -- perturbation
+            -- dest: "transform"
+            -- action: store "perturb"
+            -- default: "none"
+         -- contrast
+            -- dest: "transform"
+            -- action: store "contrast"
+            -- default: "none"
+      -- from (optional, takes 1 argument)
+         -- base
+            -- dest: "reference"
+            -- action: store "base"
+         -- mean
+            -- dest: "reference"
+            -- action: store "mean"
+   -- full state
+      -- dest: "reference"
+      -- action: store "full"
+   -- base state
+      -- dest: "reference"
+      -- action: store "base"
+   -- mean state
+      -- dest: "reference"
+      -- action: store "mean"
+-- mutually exclusive group (optional)
+   -- state
+      -- dest: "dimension"
+      -- action: store 2
+      -- default: 2
+   -- profile
+      -- dest: "dimension"
+      -- action: store 1
+      -- default: 2
+
+

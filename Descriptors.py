@@ -396,7 +396,7 @@ class MovieDescriptor(object):
       return True
 
    #===========================================================================
-   def frame_data(self, state):
+   def frame_data(self, state, pad_bounds=0.0):
       """
       Compute the data for a single frame of the described movie.
 
@@ -414,6 +414,7 @@ class MovieDescriptor(object):
 
       Arguments:
          state (SimulationState) : the current state of the simulation
+         pad_bounds (float) : extra padding around value bounds
 
       Returns (in order):
          variable (numpy.ndarray) : the masked data array
@@ -467,13 +468,16 @@ class MovieDescriptor(object):
       bounds_type = state.known_variables[self.variable].zero
       if bounds_type == "lower bound":
          vlo = 0.0
-         vhi = var.max()
+         vhi = (1.0 + pad_bounds) * var.max()
       elif bounds_type == "center":
-         vhi = np.abs(var).max()
+         vhi = (1.0 + 2.0*pad_bounds) * np.abs(var).max()
          vlo = -vhi
       elif bounds_type is None:
          vlo = var.min()
          vhi = var.max()
+         pad = pad_bounds * (vhi - vlo)
+         vhi += pad
+         vlo -= pad
       else:
          pass  # TODO
       if self.value_limits.lo is not None:

@@ -5,15 +5,21 @@ This module manages the loops and control logic for making the frames.  It is
 generally entered through the make_all_frames routine, which takes a list of
 DUMSES output file names and a list of MovieDescriptors, then loops as
 appropriate to make the frames.  It can also be entered one level farther down,
-to the make_single_frame routine, which is called by the make_all_frames loops,
-and takes the name of a single DUMSES output and a single MovieDescriptor, then
-draws the appropriate frame.
+to the make_single_frame routine (which is called by the make_all_frames
+loops), which takes the name of a single DUMSES output and a single
+MovieDescriptor, then draws the appropriate frame.
 
 Attributes:
    make_all_frames : makes all frames for lists of outputs and movies
    make_single_frame : makes a single frame for a given output and movie
    panel_2D_pseudocolor : draws a 2D pseudocolor plot on a given axes
 """
+
+# TODO : When going back through and cleaning up the errors/exceptions/warnings
+#        throughout the code, I should add notes to the docstrings regarding
+#        what sorts of errors may arise from each method/object.  That way I
+#        can better set up my try/except blocks, based on actually knowing what
+#        to catch.
 
 # TODO : Idea: Allow specification of colorbar limits as function of time.
 #        Currently I allow a static colorbar minimum/maximum, but can this be
@@ -54,10 +60,9 @@ def make_all_frames(data_list, movie_list):
    list_of_stubs = []
    s_blacklist = set()
    v_blacklist = set()
-   m_blacklist = set()
    for movie in movie_list.values():
 
-      # Check #1 : All movies have unique stubs
+      # Do all movies have unique stubs?
       if movie.stub in list_of_stubs:
          if movie.stub not in s_blacklist: # Only warn once per repeated stub
             msg = "".join(("Multiple movies with stub ", movie.stub,
@@ -67,39 +72,26 @@ def make_all_frames(data_list, movie_list):
       else:
          list_of_stubs.append(movie.stub)
 
-      # Check #2 : All movies are requesting valid variables
-      if movie.variable not in SD.SimulationState.known_variables:
-         msg = "".join(('Invalid variable "', movie.variable,
-            '" in movie with stub "', movie.stub,
-            '".  This will be excluded.'))
-         warnings.warn(msg, UserWarning)
-         v_blacklist.add(movie.variable)
-
-      # Check #3 : All movies are requesting valid modes
-      # Note : We allow any modes known to SimulationState, but also the
-      #        "profile" mode, which will be constructed here.
-      profile_mode = False
-      if movie.mode not in SD.SimulationState.known_modes:
-         if movie.mode in ["profile: full state", "profile: perturbation",
-               "profile: contrast"]:
-            profile_mode = True
-         else:
-            msg = "".join(('Invalid mode"', movie.mode,
-               '" in movie with stub "', movie.stub,
-               '".  This will be excluded.'))
-            warnings.warn(msg, UserWarning)
-            m_blacklist.add(movie.mode)
-
    # Remove any disallowed MovieDescriptors
    movie_list = {m : movie_list[m] for m in movie_list
          if movie_list[m].stub not in s_blacklist}
    movie_list = {m : movie_list[m] for m in movie_list
          if movie_list[m].variable not in v_blacklist}
-   movie_list = {m : movie_list[m] for m in movie_list
-         if movie_list[m].mode not in m_blacklist}
+
+   # Do any of the surviving movies need the initial state?
+   profile_mode = False
+   for movie in movie_list.values():
+      if movie.dimension == 1:
+         profile_mode = True
+         break
+
+      # TODO : Warn users that if any of the movies have absolute paths, it is
+      #        possible to have things overwritten/interleaved unpredictably if
+      #        there are multiple data series.
 
    # Sorting makes it more likely that you'll hit the initial state before the
-   # other states in the same series.
+   # other states in the same series, thus potentially saving the need to dump
+   # and reload different initial states all the time in a poorly-ordered list.
    data_list.sort()
 
    # If needed, save the initial state for the current series
@@ -118,48 +110,61 @@ def make_all_frames(data_list, movie_list):
       #    a possible trailing "/".
       # -- DumsesData expects the path (all the "subpath" bits, ending in a
       #    "/") and the number (the ###### as an integer).
-      # -- For genericness, we will assume that not all output files in the
-      #    list share a common inputs file.
-      # -- For simplicity, We will assume that the inputs file is in the same
-      #    directory as the output.
+      # -- We will assume that a series consists of files stored in the same
+      #    directory (we use realpath to make sure different ways of referring
+      #    to the same directory are still counted as the same series), and we
+      #    assume that a series shares a common inputs file.
       if output_name[-1] == "/":
          output_name = output_name[:-1]
       partition = output_name.rpartition('/')
       path = os.path.realpath(''.join(partition[0:2]))
       if path[-1] != "/":
          path += "/"
-      number = int(partition[2].rpartition("_")[2])
+      try:
+         number = int(partition[2].rpartition("_")[2])
+      except ValueError:
+         # TODO : Warn user that we couldn't parse the output file name
+         continue
 
       # Open the input and output files to construct the state
-      data = DumsesData(number, filedir=path)
-      si = SD.SimulationInput(path + "input")
+      try:
+         data = DumsesData(number, filedir=path)
+      except IOError:
+         # TODO : Warn user that we couldn't open the output file
+         continue
+      try:
+         si = SD.SimulationInput(path + "input")
+      except IOError:
+         # TODO : Warn user that we couldn't open the input file
+         continue
       state = SD.SimulationState(data, si)
 
       # Update the (t == 0) entry if necessary
-      if profile_mode:
-         if series_name != path:
-            if state.t == 0:
-               state0 = state
+      if profile_mode and series_name != path:
+         if state.t == 0:
+            state0 = state
+            series_name = path
+         else:
+            try:
+               data0 = DumsesData(0, filedir=path)
+               state0 = SD.SimulationState(data0, si)
                series_name = path
-            else:
-               try:
-                  data0 = DumsesData(0, filedir=path)
-                  state0 = SD.SimulationState(data0, si)
-                  series_name = path
-               except:
-                  msg = "Unable to open initial state for series " + path + \
-                        "; no initial profiles will be plotted."
-                  warnings.warn(msg, UserWarning)
-                  state0 = None
-                  series_name = None
+            except IOError:
+               msg = "Unable to open initial state for series " + path + \
+                     "; no initial profiles will be plotted."
+               warnings.warn(msg, UserWarning)
+               state0 = None
+               series_name = None
 
       for movie in movie_list.values():
          if movie.within_time_limits(state.t):
-            make_single_frame(state, state0, movie, path, number)
+            # TODO : Catch exceptions that are recoverable (e.g., an invalid
+            #        variable) so that the other frames can be generated.
+            make_single_frame(state, movie, path, number, state0)
 
 #==============================================================================
 
-def make_single_frame(state, state0, movie, directory, number):
+def make_single_frame(state, movie, directory, number, state0=None):
    """
    Make a single frame based on the current state and a movie description.
 
@@ -182,6 +187,8 @@ def make_single_frame(state, state0, movie, directory, number):
       state (SimulationState) : the current state of the simulation
       movie (MovieDescriptor) : the description of the movie to be made
       directory (string) : the directory where the simulation data is stored
+      number (int) : the number of the current data file
+      state0 (SimulationState) : the initial state of the simulation (or None)
    """
 
    print "Making frame {s}{n:06d} (t = {t}).".format(t=state.t, s=movie.stub,
@@ -195,7 +202,7 @@ def make_single_frame(state, state0, movie, directory, number):
    # Fill the panels (Axes)
    if movie.mode in ["profile: full state", "profile: perturbation",
          "profile: contrast"]:
-      panel_profile(state, state0, movie, ax1)
+      panel_profile(state, movie, ax1, state0)
    else:
       panel_2D_pseudocolor(state, movie, ax1)
 
@@ -276,7 +283,7 @@ def panel_2D_pseudocolor(state, movie, axes):
 
 #==============================================================================
 
-def panel_profile(state, state0, movie, ax_prof):
+def panel_profile(state, movie, ax_prof, state0=None):
    """
    Draw the profiles as one panel of a figure.
 
@@ -290,25 +297,30 @@ def panel_profile(state, state0, movie, ax_prof):
       axes (matplotlib.axes.Axes) : the axes to draw the profile plot on
    """
 
+   pad = 0.075
+
    # Get the data to be drawn
-   movie_copy = copy.copy(movie)
+   data, x, y, z, vlo, vhi = movie.frame_data(state, pad_bounds=pad)
+   view = data.reshape((data.shape[0], data.shape[1]*data.shape[2]))
+   mean = np.mean(view, axis=1)
+   stdv = np.std(view, axis=1)
 
-   movie_copy.mode = "base state"
-   base, x, y, z, vlo, vhi = movie_copy.frame_data(state)
-   base = base[:,0,0]
-
-   movie_copy.mode = "full state"
    if state0 is not None:
-      init, x, y, z, vlo, vhi = movie_copy.frame_data(state0)
+      init, x2, y2, z2, vlo2, vhi2 = movie.frame_data(state0)
       view = init.reshape((init.shape[0], init.shape[1]*init.shape[2]))
       std0 = np.std(view, axis=1)
       min0 = np.amin(view, axis=1)
       max0 = np.amax(view, axis=1)
 
-   data, x, y, z, vlo, vhi = movie_copy.frame_data(state)
-   view = data.reshape((data.shape[0], data.shape[1]*data.shape[2]))
-   mean = np.mean(view, axis=1)
-   stdv = np.std(view, axis=1)
+   if movie.mode.transform == "none":
+      base = np.zeros_like(mean)
+   else:
+      movie_copy = copy.deepcopy(movie)
+      movie_copy.mode.absolute = False
+      movie_copy.mode.transform = "none"
+      movie_copy.mode.reference = "base"
+      data, x2, y2, z2, vlo2, vhi2 = movie_copy.frame_data(state)
+      base = data[:,0,0]
 
    x = x[:,0,0]
 
@@ -348,78 +360,13 @@ def panel_profile(state, state0, movie, ax_prof):
    ax_stdv.set_ylabel("standard deviation")
 
    # Set the plotting limits
-   bounds_padding = 0.075
-
-   bounds_type = state.bounds_type(movie.variable, "full state")
-   if bounds_type == "non-negative":
-      if movie.value_limits.hi is None:
-         bounds_max = max(base.max(), mean.max(), (mean+stdv).max())
-         if state0 is not None:
-            bounds_max = max(bounds_max, max0.max(), (base+std0).max())
-         if bounds_max == 0.0:
-            bounds_max = 1.0
-         else:
-            bounds_max = (1.0 + bounds_padding) * bounds_max
-      else:
-         bounds_max = movie.value_limits.hi
-      if movie.value_limits.lo is None:
-         bounds_min = 0.0
-      else:
-         bounds_min = movie.value_limits.lo
-
-   elif bounds_type == "symmetric":
-      if movie.value_limits.lo is None and movie.value_limits.hi is None:
-         bounds = max(np.abs(base).max(), np.abs(mean).max(),
-               np.abs(mean-stdv).max())
-         bounds = max(bounds, np.abs(base).max(), np.abs(mean).max(),
-               np.abs(mean+stdv).max())
-         if state0 is not None:
-            bounds = max(bounds, np.abs(min0).max(), np.abs(base-std0).max())
-            bounds = max(bounds, np.abs(max0).max(), np.abs(base+std0).max())
-         if bounds == 0.0:
-            bounds_max = 1.0
-         else:
-            bounds_max = (1.0 + bounds_padding) * bounds
-         bounds_min = -bounds_max
-      elif movie.value_limits.lo is not None:
-         bounds_max = abs(movie.value_limits.lo)
-         bounds_min = -bounds_max
-      elif movie.value_limits.hi is not None:
-         bounds_max = abs(movie.value_limits.hi)
-         bounds_min = -bounds_max
-      else:
-         bounds_max = movie.value_limits.hi
-         bounds_min = movie.value_limits.lo
-
-   elif bounds_type == "general":
-      bounds_min = min(base.min(), mean.min(), (mean-stdv).min())
-      if state0 is not None:
-         bounds_min = min(bounds_min, min0.min(), (base-std0).min())
-      bounds_max = max(base.max(), mean.max(), (mean+stdv).max())
-      if state0 is not None:
-         bounds_max = max(bounds_max, max0.max(), (base+std0).max())
-      span = bounds_max - bounds_min
-      if span == 0.0:
-         bounds_max = 1.0
-         bounds_min = -1.0
-      else:
-         bounds_min -= bounds_padding * span
-         bounds_max += bounds_padding * span
-      if movie.value_limits.lo is not None:
-         bounds_min = movie.value_limits.lo
-      if movie.value_limits.hi is not None:
-         bounds_max = movie.value_limits.hi
-   else:
-      # TODO
-      pass
-   ax_prof.set_ylim([bounds_min, bounds_max])
-
    bounds_max = stdv.max()
    if state0 is not None:
       bounds_max = max(bounds_max, std0.max())
    if bounds_max == 0.0:
       bounds_max = 1.0
    else:
-      bounds_max = (1.0 + bounds_padding) * bounds_max
+      bounds_max = (1.0 + pad) * bounds_max
    ax_stdv.set_ylim([0.0, bounds_max])
+   ax_prof.set_ylim([vlo, vhi])
 
