@@ -14,9 +14,6 @@ The ModeDescriptor object describes the details of how to process a variable
 for a movie.  It allows specification of profiles or 2D pseudocolor plots, with
 a selection of transformations that may be applied.
 
-The InvalidParameterError states that a specified parameter has been assigned
-an invalid value.
-
 The MovieWindow class describes a viewing window (limits in the coordinates)
 for plotting.  It uses a MovieLimits object for each coordinate direction.
 These two essentially exist for packaging more than functionality.
@@ -25,7 +22,6 @@ Attributes:
    MovieDescriptor (class) : a description of the movie to be made
    MaskDescriptor (class) : a description of a mask to be applied
    ModeDescriptor (class) : a description of a plotting mode
-   InvalidParameterError (class) : an exception for invalid parameter values
    MovieLimits (class) : low/high limits of some quantity
    MovieWindow (class) : low/high limits in 3 dimensions for a viewing space
 """
@@ -34,36 +30,7 @@ import math
 import numpy as np
 import warnings
 
-#==============================================================================
-
-class InvalidParameterError(KeyError):
-   """
-   Signals an invalid choice of parameter.
-
-   Attributes:
-      param (string) : the parameter that was assigned an invalid value
-      value (string) : the invalid value
-   """
-
-   param = None
-   value = None
-
-   def __init__(self, p, v):
-      """
-      Initialize with a string specifying parameter and a stringifiable value.
-      """
-      self.param = p
-      self.value = str(v)
-
-   def __repr__(self):
-      """
-      String representation.
-      """
-      return '"'.join(('Invalid parameter: ', self.param,
-         ' may not take the value ', self.value, '.'
-
-   __str__ = __repr__  # To mask parent class implementations of __str__
-
+#------------------------------------------------------------------------------
 #==============================================================================
 
 class MovieLimits(object):
@@ -84,6 +51,15 @@ class MovieLimits(object):
       """
       return "Limits: [" + str(self.lo) + "," + str(self.hi) + "]"
 
+   __str__ == __repr__
+
+# End of MovieLimits class
+#==============================================================================
+#------------------------------------------------------------------------------
+
+
+
+#------------------------------------------------------------------------------
 #==============================================================================
 
 class MovieWindow(object):
@@ -106,6 +82,13 @@ class MovieWindow(object):
       return "   \n".join(("Movie window:",
          repr(self.x), repr(self.y), repr(self.z)))
 
+# End of MovieWindow class
+#==============================================================================
+#------------------------------------------------------------------------------
+
+
+
+#------------------------------------------------------------------------------
 #==============================================================================
 
 class MaskDescriptor(object):
@@ -120,7 +103,6 @@ class MaskDescriptor(object):
    are "<=", "<", ">", and ">=".
 
    Attributes:
-      __initialized (bool) : flag stating if instance has been initialized
       _variable (string) : the variable used for computing the mask
       _mode (ModeDescriptor) : the mode for the variable
       _threshold (float) : the cutoff value for the mask
@@ -128,41 +110,12 @@ class MaskDescriptor(object):
    """
 
    #===========================================================================
-   def __init__(self):
-      """
-      A bare initialization method for a dummy mask.
-      """
-
-      self.__clear()
-
-   #===========================================================================
    def __init__(self, dictionary):
       """
-      Initializes a mask that is fully described.
-
-      Note: This constructor permits a default value for mode of
-      "pseudocolor: full state".
-
-      Arguments:
-         dictionary (dict) : a dictionary with the needed information
+      Construct the class from a dictionary.
       """
 
-      self.__construct(dictionary)
-
-   #===========================================================================
-   def clear(self):
-      """
-      Flush the data to give an uninitialized instance.
-      """
-
-      self.__initialized = False
-
-      self._variable = None
-      self._mode = None
-      self._threshold = None
-      self._operator = None
-
-   __clear = clear # private copy to preserve __init__ behavior
+      self.construct(*args)
 
    #===========================================================================
    def construct(self, dictionary):
@@ -176,18 +129,25 @@ class MaskDescriptor(object):
          dictionary (dict) : a dictionary with the needed information
       """
 
-      self._variable = dictionary["variable"]
-      mode_name = dictionary.get("mode", "pseudocolor: full state")
-      self._mode = ModeDescriptor(mode_name)
-      self._threshold = float(dictionary["threshold"])
-      self._operator = dictionary["operator"]
+      # Get the values and do conversions before changing the internal storage
+      v = dictionary["variable"]
+      m = ModeDescriptor(dictionary.get("mode", "pseudocolor: full state"))
+      if m.dimension == 1:
+         # TODO : What error goes here?
+         raise StandardError("cannot define mask based on profile")
+      t = float(dictionary["threshold"])
+      o = dictionary["operator"]
+      if o not in ["<", "<=", ">", ">="]:
+         # TODO : Think about error to raise here
+         raise StandardError("something")
 
-      self.__initialized = True
-
-   __construct = construct # private copy to preserve __init__ behavior
+      # Now that we've confirmed the options are valid, we store them
+      self._variable = v
+      self._mode = m
+      self._threshold = t
+      self._operator = o
 
    #===========================================================================
-
    def __repr__(self):
       """
       Defines the string representation of the instance.
@@ -195,6 +155,15 @@ class MaskDescriptor(object):
 
       return 'MaskDescriptor: "' + ' '.join((self._variable, self._mode,
          self._operator, str(self._threshold))) + '"'
+
+   #===========================================================================
+   def __str__(self):
+      """
+      Defines the string representation of the instance.
+      """
+
+      return ' '.join((self._variable, self._mode, self._operator,
+         str(self._threshold)))
 
    #===========================================================================
    def apply(self, state):
@@ -209,10 +178,7 @@ class MaskDescriptor(object):
          state (SimulationState) : the current state of the simulation
       """
 
-      if not self.__initialized:
-         raise UninitializedObjectError()
-
-      var = state.extract(self._variable, self._mode)
+      var = self._mode.extract(self._variable, state)
 
       if self._operator == "<":
          mask = (var < self._threshold)
@@ -223,15 +189,18 @@ class MaskDescriptor(object):
       elif self._operator == ">=":
          mask = (var >= self._threshold)
       else:
+         # TODO : check that this is the right exception
          raise InvalidParameterError("operator", self._operator)
 
       return mask
 
 # End of MaskDescriptor class
 #==============================================================================
+#------------------------------------------------------------------------------
 
 
 
+#------------------------------------------------------------------------------
 #==============================================================================
 
 class MovieDescriptor(object):
@@ -259,6 +228,10 @@ class MovieDescriptor(object):
       masks (list of MaskDescriptors) : the masks to be applied (if any)
    """
 
+   # TODO : The MovieDescriptor should have a property defining how the mask
+   #        should be applied: force-high, force-low, or explicit (default to
+   #        explicit).
+
    #===========================================================================
    def __repr__(self):
       """
@@ -267,109 +240,87 @@ class MovieDescriptor(object):
 
       return " ".join(("Movie of the", self.variable, self.mode))
 
-   #===========================================================================
-   def __init__(self):
-      """
-      A bare initialization method for a dummy movie.
-      """
-
-      self.__clear()
-
-   #===========================================================================
-   def clear(self):
-      """
-      Reset to default values and clear values that have no default.
-      """
-
-      self.stub = None
-      self.path = None
-      self.image_type = None
-      self.variable = None
-      self.mode = ModeDescriptor("pseudocolor: full state")
-      self.window = MovieWindow()
-      self.time_limits = MovieLimits()
-      self.value_limits = MovieLimits()
-      self.fps = None
-      self.movie_type = None
-      self.make_movie = True
-      self.final_pause = 0
-      self.masks = []
-
-   __clear = clear # private copy to preserve __init__ behavior
+   __str__ == __repr__
 
    #===========================================================================
    def __init__(self, dictionary, mask_list):
       """
-      Initialize the instance from a dictionary."
+      Initialize the instance from a dictionary.
       """
 
-      self.__construct(dictionary, mask_list)
+      self.construct(dictionary, mask_list)
 
    #===========================================================================
    def construct(self, dictionary, mask_list):
       """
-      Initialize the instance from a dictionary."
+      Initialize the instance from a dictionary.
       """
 
-      self.stub = dictionary["stub"]
-      self.path = dictionary["path"]
-      self.image_type = dictionary["image_type"]
-      self.variable = dictionary["variable"]
-      mode_name = dictionary.get("mode", "pseudocolor: full state")
-      self.mode = ModeDescriptor(mode_name)
+      stub = dictionary["stub"]
+      path = dictionary["path"]
+      image_type = dictionary["image_type"]
+      variable = dictionary["variable"]
+      mode = ModeDescriptor(dictionary.get("mode", "pseudocolor: full state"))
 
-      self.window = MovieWindow()
+      window = MovieWindow()
       try:
-         self.window.x.lo = float(dictionary["window_x_lo"])
+         window.x.lo = float(dictionary["window_x_lo"])
       except KeyError:
-         self.window.x.lo = None
+         window.x.lo = None
       try:
-         self.window.x.hi = float(dictionary["window_x_hi"])
+         window.x.hi = float(dictionary["window_x_hi"])
       except KeyError:
-         self.window.x.hi = None
+         window.x.hi = None
       try:
-         self.window.y.lo = float(dictionary["window_y_lo"])
+         window.y.lo = float(dictionary["window_y_lo"])
       except KeyError:
-         self.window.y.lo = None
+         window.y.lo = None
       try:
-         self.window.y.hi = float(dictionary["window_y_hi"])
+         window.y.hi = float(dictionary["window_y_hi"])
       except KeyError:
-         self.window.y.hi = None
+         window.y.hi = None
       try:
-         self.window.z.lo = float(dictionary["window_z_lo"])
+         window.z.lo = float(dictionary["window_z_lo"])
       except KeyError:
-         self.window.z.lo = None
+         window.z.lo = None
       try:
-         self.window.z.hi = float(dictionary["window_z_hi"])
+         window.z.hi = float(dictionary["window_z_hi"])
       except KeyError:
-         self.window.z.hi = None
+         window.z.hi = None
 
-      self.time_limits = MovieLimits()
+      time_limits = MovieLimits()
       try:
-         self.time_limits.lo = float(dictionary["time_lo"])
+         time_limits.lo = float(dictionary["time_lo"])
       except KeyError:
-         self.time_limits.lo = None
+         time_limits.lo = None
       try:
-         self.time_limits.hi = float(dictionary["time_hi"])
+         time_limits.hi = float(dictionary["time_hi"])
       except KeyError:
-         self.time_limits.hi = None
+         time_limits.hi = None
 
-      self.value_limits = MovieLimits()
+      value_limits = MovieLimits()
       try:
-         self.value_limits.lo = float(dictionary["value_lo"])
+         value_limits.lo = float(dictionary["value_lo"])
       except KeyError:
-         self.value_limits.lo = None
+         value_limits.lo = None
       try:
-         self.value_limits.hi = float(dictionary["value_hi"])
+         value_limits.hi = float(dictionary["value_hi"])
       except KeyError:
-         self.value_limits.hi = None
+         value_limits.hi = None
 
-      # TODO : This current logic looks like it will require FPS no matter
-      #        what.  I should change this so that if make_movie is false, then
-      #        options like fps that only apply to the movie will be ignored.
-      self.fps = float(dictionary["fps"])
-      self.movie_type = dictionary["movie_type"]
-      self.make_movie = bool(dictionary.get("make_movie", True))
+      make_movie = bool(dictionary.get("make_movie", True))
+      if make_movie:
+         fps = float(dictionary["fps"])
+         movie_type = dictionary["movie_type"]
+      else:
+         # If we are not actually making the movie (i.e., frames only), we are
+         # allowed to not specify parameters that only apply to making the
+         # final movie, thus None becomes an allowed value.  But we still try
+         # to get the actual values supplied just in case.
+         fps = dictionary.get("fps", None)
+         if fps is not None:
+            fps = float(fps)
+         movie_type = dictionary.get("movie_type", None)
 
       pause = dictionary.get("final_pause", "0f")
       pause_length = pause[:-1]
@@ -378,27 +329,55 @@ class MovieDescriptor(object):
          try:
             pause_length = int(pause_length)
          except:
+            # TODO : Is this the right error?
             raise ValueError("Invalid spefication of final pause.")
       elif unit == "s":
+         if fps is None:
+            # TODO : Is this the right error?
+            raise ValueError(
+                  "FPS not specified; cannot give final pause in seconds.")
          try:
-            pause_length = int(math.ceil(float(pause_length) * self.fps))
+            pause_length = int(math.ceil(float(pause_length) * fps))
          except:
+            # TODO : Is this the right error?
             raise ValueError("Invalid spefication of final pause.")
       else:
+         # TODO : Is this the right error?
          raise ValueError("Invalid spefication of final pause.")
-      self.final_pause = pause_length
+      final_pause = pause_length
+
+      # TODO : How to handle masks in different dimensions?  For example, what
+      #        if I want to plot a 2D pseudocolor image of the density, but I
+      #        list a mask that says the perturbation profile must be greater
+      #        than 0.  Can I handle this calculation when I apply the masks?
+      #        Or must I forbid masks of different dimensionality?  The first
+      #        case (deal with it) should be handled where the masks are
+      #        applied.  The second case (forbit it) should be handled here.
 
       mask_names = dictionary.get("masks", [])
-      self.masks = []
+      masks = []
       for name in mask_names:
          try:
-            self.masks.append(mask_list[name])
+            masks.append(mask_list[name])
          except KeyError:
             msg = "".join(('Mask "', name,
                '" is undefined and will be skipped.'))
             warnings.warn(msg, UserWarning)
 
-   __construct = construct # private copy to preserve __init__ behavior
+      # Now that all the values have been verified, save them
+      self.stub = stub
+      self.path = path
+      self.image_type = image_type
+      self.variable = variable
+      self.mode = mode
+      self.window = window
+      self.time_limits = time_limits
+      self.value_limits = value_limits
+      self.make_movie = make_movie
+      self.fps = fps
+      self.movie_type = movie_type
+      self.final_pause = final_pause
+      self.masks = masks
 
    #===========================================================================
    def within_time_limits(self, time):
@@ -421,6 +400,18 @@ class MovieDescriptor(object):
       """
       Compute the data for a single frame of the described movie.
 
+      Collapsing the data to a lower dimensionality (2D slice, 1D profile, etc)
+      will be handled elsewhere.  This routine ignores the dimensionality of
+      the requested mode and returns the full 3D state.  It is up to the
+      plotting routine to collapse as needed.  The reason for this is that the
+      profile plots don't extract a single line from the data, but instead 6
+      lines: two can be processed from the 3D equivalent, one can be processed
+      from the 3D equivalent of the base state, and three can be processed from
+      the 3D equivalent of the initial state.  Thus to plot the profile, the
+      plotter will call frame_data three times with variations on the original
+      mode or with different states, and process the three resulting 3D arrays
+      into the six desired 1D lines that are plotted.
+
       Arguments:
          state (SimulationState) : the current state of the simulation
 
@@ -431,14 +422,8 @@ class MovieDescriptor(object):
          z (numpy.ndarray) : the z-coordinates
       """
 
-      # TODO : Need to update this to reflect new ModeDescriptor
-
-      # Make sure we're actually computing a variable
-      if self.variable is None:
-         raise UninitializedObjectError()
-
       # Get the variable
-      var = state.extract(self.variable, self.mode)
+      var = self.mode.extract(self.variable, state)
 
       # Apply the limits from the MovieWindow
       x = state.x[:,0,0]
@@ -479,14 +464,14 @@ class MovieDescriptor(object):
       var = np.ma.masked_where(cumulative_mask, var)
 
       # Compute value limits
-      bounds_type = state.bounds_type(self.variable, self.mode)
-      if bounds_type == "non-negative":
+      bounds_type = state.known_variables[self.variable].zero
+      if bounds_type == "lower bound":
          vlo = 0.0
          vhi = var.max()
-      elif bounds_type == "symmetric":
+      elif bounds_type == "center":
          vhi = np.abs(var).max()
          vlo = -vhi
-      elif bounds_type == "general":
+      elif bounds_type is None:
          vlo = var.min()
          vhi = var.max()
       else:
@@ -500,9 +485,11 @@ class MovieDescriptor(object):
 
 # End of MovieDescriptor class
 #==============================================================================
+#------------------------------------------------------------------------------
 
 
 
+#------------------------------------------------------------------------------
 #==============================================================================
 
 class ModeDescriptor(object):
@@ -514,17 +501,21 @@ class ModeDescriptor(object):
    properties are visible to users, but filling them in with the initialization
    routine performs consistency checks.
 
-   The attributes in a bit more detail:  The dimension can take the value 1
-   (for a profile) or 2 (for a pseudocolor).  The transform may be "none" (the
-   full state), "perturbation" (subtract the reference state), or "contrast"
-   (subtract and divide by the reference state).  The reference state may be
-   "full" (only allowed in conjunction with the "none" transformation to
-   specify that the full state should be plotted), "base" (the steady base
-   state for the initial conditions), or "mean" (the horizontal average of the
-   state).  Some restrictions apply:  The absolute value operator may only be
-   applied to pseudocolor plots of the perturbation or contrast.  The profile
-   only allows the full state ("none" transformation), or the perturbation or
-   contrast (only relative to the base state).
+   The attributes in a bit more detail:
+   -- The dimension can take the value 1 (for a profile) or 2 (for a
+      pseudocolor).  This can be extended to 3 when I have a chance to
+      implement 3D visualizations.  When the dimension is 1, only 3 modes are
+      allowed: full state, or the perturbation or contrast relative to the base
+      state.
+   -- The transform may be "none" (the full state), "perturbation" (subtract
+      the reference state), or "contrast" (subtract and divide by the reference
+      state).
+   -- The reference state may be "full" (only allowed in conjunction with the
+      "none" transformation to specify that the full state should be plotted),
+      "base" (the steady base state for the unperturbed initial conditions), or
+      "mean" (the horizontal average of the state).
+   -- The absolute value operator may only be applied to pseudocolor plots of
+      the perturbation or the contrast.
 
    Attributes:
       dimension (int) : the dimensionality of the result
@@ -567,7 +558,7 @@ class ModeDescriptor(object):
       """
 
       if string is None:
-         self.__default()
+         self.__init_default()
       else:
          # Normalize spacing
          mode = ' '.join(string.split())
@@ -586,6 +577,7 @@ class ModeDescriptor(object):
                self.transform = detail
                self.reference = "base"
             else:
+               # TODO : Check the error used here
                raise InvalidParameterError("mode", mode)
          elif dim == "pseudocolor":
             self.dimension = 2
@@ -600,6 +592,7 @@ class ModeDescriptor(object):
                elif "contrast" in detail:
                   self.transform = "contrast"
                else:
+                  # TODO : Check the error used here
                   raise InvalidParameterError("mode", mode)
                a, f = detail.split(self.transform)
                a = a.strip()
@@ -609,12 +602,14 @@ class ModeDescriptor(object):
                elif a == "absolute":
                   self.absolute = True
                else:
+                  # TODO : Check the error used here
                   raise InvalidParameterError("mode", mode)
                if f == "" or f == "from base":
                   self.reference = "base"
                elif f == "from mean":
                   self.reference = "mean"
                else:
+                  # TODO : Check the error used here
                   raise InvalidParameterError("mode", mode)
 
    #===========================================================================
@@ -623,7 +618,11 @@ class ModeDescriptor(object):
       Initialize from mode properties.
       """
 
-      if a and (d != 2 or t not in ["perturbation", "contrast"]):
+      # TODO : This was originally written for compactness.  I need to rewrite
+      #        it to give clear error messages.
+
+      if a and (d == 1 or t not in ["perturbation", "contrast"]):
+         # TODO : Check the error used here
          raise InvalidParameterError("absolute", a)
 
       if d == 1:
@@ -634,6 +633,7 @@ class ModeDescriptor(object):
                     "base" : ["none", "perturbation", "contrast"],
                     "mean" : ["none", "perturbation", "contrast"]}
       else:
+         # TODO : Check the error used here
          raise InvalidParameterError("dimension", d)
 
       if t in allowed.get(r, []):
@@ -642,6 +642,7 @@ class ModeDescriptor(object):
          self.transform = t
          self.reference = r
       else:
+         # TODO : Check the error used here
          raise InvalidParameterError("transform", t)
 
    #===========================================================================
@@ -651,9 +652,11 @@ class ModeDescriptor(object):
       """
 
       # TODO : This was originally written for compactness.  I need to rewrite
-      #        it to give clear error messages (from InvalidParameterError).
+      #        it to give clear error messages.
+
       if self.dimension == 1:
          if self.absolute:
+            # TODO : Check the error used here
             raise InvalidParameterError("absolute", self.absolute)
          if self.reference == "full" and self.transform == "none":
             return "profile: full state"
@@ -662,14 +665,17 @@ class ModeDescriptor(object):
                   self.transform in ["perturbation", "contrast"]):
                return "profile: " + self.transform
             else:
+               # TODO : Check the error used here
                raise InvalidParameterError("transform", self.transform)
       elif self.dimension == 2:
          if self.transform == "none":
             if self.absolute:
+               # TODO : Check the error used here
                raise InvalidParameterError("absolute", self.absolute)
             if self.reference in ["full", "base", "mean"]:
                return "pseudocolor: " + self.reference + " state"
             else:
+               # TODO : Check the error used here
                raise InvalidParameterError("reference", self.reference)
          elif self.transform in ["perturbation", "contrast"]:
             if self.reference in ["base", "mean"]:
@@ -680,10 +686,71 @@ class ModeDescriptor(object):
                detail_list.extend([self.transform, "from", self.reference])
                return "pseudocolor: " + " ".join(detail_list)
             else:
+               # TODO : Check the error used here
                raise InvalidParameterError("reference", self.reference)
          else:
+            # TODO : Check the error used here
             raise InvalidParameterError("transform", self.transform)
       else:
+         # TODO : Check the error used here
          raise InvalidParameterError("dimension", self.dimension)
 
+   #===========================================================================
+   def extract(self, variable, state):
+      """
+      Extract the data from the state and apply the appropriate operations.
+
+      This serves as a wrapper around the SimulationState's extract method in
+      order to handle complicated modes (SimulationState is only "aware" of the
+      full-state and base-state modes).
+
+      Dimensionality is ignored.  As discussed in the MovieDescriptor, all
+      extraction is done on the full 3D state, and the plotting routine is
+      responsible for understanding enough about the mode to process the data
+      into its final form.
+      """
+
+      if self.transform == "none":
+         if self.absolute:
+            # TODO : What error to raise here?
+            raise StandardError("bad absolute")
+         if self.reference == "full":
+            var = state.extract(variable)
+         elif self.reference == "base":
+            var = state.extract(variable, False)
+         elif state.reference == "mean":
+            var = state.extract(variable)
+            shape = var.shape
+            var = np.mean(var.reshape((shape[0], shape[1]*shape[2])), axis=1)
+            var = var.reshape([shape[0], 1, 1])
+            var = var.repeat(shape[1], axis=1).repeat(shape[2], axis=2)
+         else:
+            # TODO : What error to raise here?
+            raise StandardError("bad reference")
+      elif self.transform in ["perturbation", "contrast"]:
+         full = state.extract(variable)
+         if self.reference == "base":
+            ref = state.extract(variable, False)
+         elif self.reference == "mean":
+            ref = state.extract(variable)
+            shape = ref.shape
+            ref = np.mean(ref.reshape((shape[0], shape[1]*shape[2])), axis=1)
+            ref = ref.reshape([shape[0], 1, 1])
+            ref = ref.repeat(shape[1], axis=1).repeat(shape[2], axis=2)
+         else:
+            # TODO : What error to raise here?
+            raise StandardError("bad reference")
+         var = full - ref
+         if self.transform == "contrast":
+            var = var / ref
+         if self.absolute:
+            var = np.abs(var)
+      else:
+         # TODO : What error to raise here?
+         raise StandardError("bad transform")
+
+      return var
+
+# End class ModeDescriptor
 #==============================================================================
+#------------------------------------------------------------------------------

@@ -35,14 +35,14 @@ if __name__ == "__main__":
    # Create a SimulationState
    ss = SD.SimulationState(dd, si)
 
-   density = ss.extract("density", "base state")
-   pressure = ss.extract("pressure", "base state")
-   velocity_x = ss.extract("x velocity", "base state")
+   density = ss.extract("density", False)
+   pressure = ss.extract("pressure", False)
+   velocity_x = ss.extract("x velocity", False)
    heating = si.heating(ss.x, ss.y, ss.z, density)
    H_Pv = heating / (pressure * velocity_x)
    H_Pv = H_Pv[1:-1,0,0]
 
-   s = ss.extract("specific entropy", "base state")
+   s = ss.extract("specific entropy", False)
    dsdx = (s[2:,0,0] - s[:-2,0,0]) / (ss.x[2:,0,0] - ss.x[:-2,0,0])
 
    mean_error = np.average(np.abs(H_Pv - dsdx))
@@ -53,9 +53,10 @@ if __name__ == "__main__":
    print "Let's run some basic tests:"
    print " - loop through all variables to ensure they compute"
    print " - loop through all modes to ensure they compute"
-   for variable in SD.SimulationState.known_variables:
-      for mode in SD.SimulationState.known_modes:
-         print "   - trying " + variable + " in " + mode + " mode"
-         var = ss.extract(variable, mode)
+   for variable in ss.known_variables:
+      print "   - trying " + variable + " (full state)"
+      var = ss.extract(variable)
+      print "   - trying " + variable + " (base state)"
+      var = ss.extract(variable, False)
    print "success!"
 

@@ -1,87 +1,33 @@
 """
 Specification of simulation descriptions
 
-This module provides the specification of five classes:
-   SimulationState
-   SimulationInput
-   InvalidVariableError
-   InvalidModeError
-
 The SimulationInput object describes the setup of the simulation.  This
 includes parameters such as the upstream conditions used to construct the
 initial state, the adiabatic index for the equation of state, and the
 description of the sources.
 
+The SimulationVariable object describes a variable that can be extracted from
+the data.  This includes a function to compute the variable, the default name
+of the variable, and how the variable related to zero ("lower bound", "center",
+or None).
+
 The SimulationState object packages the data from the current state of a
 simulation.  It also provides a mechanism for extracting a number of different
 quantities in a convenient way.
 
-The InvalidVariableError and InvalidModeError are exceptions inheriting from
-KeyError signaling invalid choices of variable and mode respectively.
-
 Attributes:
-   InvalidVariableError (class) : an error for invalid variable requests
-   InvalidModeError (class) : an error for invalid mode requests
    SimulationInput (class) : a description of the simulation
+   SimulationVariable (class) : a description of a variable
    SimulationState (class) : the current state of the simulation
 """
 
 import numpy as np
 
 from dumpy_v05.data.rd_dumses import DumsesData
-from UninitializedObject import UninitializedObjectError
+import MyExceptions as me
 
+#------------------------------------------------------------------------------
 #==============================================================================
-
-class InvalidVariableError(KeyError):
-   """
-   Signals an invalid choice of variable.
-
-   Attributes:
-      invalid_variable (string) : name of the invalid variable requested
-   """
-
-   invalid_variable = None
-
-   def __init__(self, string):
-      """
-      Initialize with a string naming the invalid variable.
-      """
-      self.invalid_variable = string
-
-   def __repr__(self):
-      """
-      Supply a detailed representation of the exception.
-      """
-      return '"'.join(("Invalid choice of variable: ",
-         str(self.invalid_variable), "."))
-
-#==============================================================================
-
-class InvalidModeError(KeyError):
-   """
-   Signals an invalid choice of mode.
-
-   Attributes:
-      invalid_mode (string) : name of the invalid mode requested
-   """
-   invalid_mode = None
-
-   def __init__(self, string):
-      """
-      Initialize with a string naming the invalid mode.
-      """
-      self.invalid_mode == string
-
-   def __repr__(self):
-      """
-      Supply a detailed representation of the exception.
-      """
-      return '"'.join(("Invalid choice of mode: ",
-         str(self.invalid_mode), "."))
-
-#==============================================================================
-
 class SimulationInput(object):
    """
    A description of the simulation.
@@ -90,7 +36,7 @@ class SimulationInput(object):
    inputs file.  It includes methods to initialize from a file and to construct
    the source functions.
 
-   Some attributes are carries for computation purposes (such as _heat_coef and
+   Some attributes are carried for computation purposes (such as _heat_coef and
    _grav_coef), while others for informational purposes (such as _Kheat and
    _Kgrav).  Only the necessary attributes are "public", while the others are
    "hidden".
@@ -131,23 +77,29 @@ class SimulationInput(object):
       return string
 
    #===========================================================================
-   def __init__(self):
+   def __str__(self):
       """
-      A bare initialization method for an empty class.
+      Supply a simple representation of the class.
       """
-
-      self.__clear()
+      if self.__initialized:
+         string = "SimulationInputs (initialized)"
+      else:
+         string = "SimulationInputs (uninitialized)"
+      return string
 
    #===========================================================================
-   def __init__(self, inputs_file_name):
+   def __init__(self, *args, **kwargs):
       """
-      Initialize the class from an inputs file.
-
-      Arguments:
-         inputs_file_name (string) : the name of the inputs file to parse
+      Construct the class by selecting the appropriate initializer.
       """
 
-      self.__construct(inputs_file_name)
+      if len(args) == 0:
+         self.clear()
+      elif len(args) == 1:
+         self.construct(*args)
+      else:
+         # TODO : Think about the appropriate error to raise here
+         raise me.InvalidParameterError("nargs", len(args))
 
    #===========================================================================
    def clear(self):
@@ -172,8 +124,6 @@ class SimulationInput(object):
       self._Kheat = None
       self._Kgrav = None
 
-   __clear = clear # private copy to preserve __init__ behavior
-
    #===========================================================================
    def construct(self, inputs_file_name):
       """
@@ -183,8 +133,18 @@ class SimulationInput(object):
          inputs_file_name (string) : the name of the inputs file to parse
       """
 
+      # TODO : Check all values are valid before saving (so you don't get a
+      #        mixed state halfway between the new and old values).
+
       # Data to extract from the parameters file, using defaults as appropriate
       # to match DUMSES code
+      # NOTE : By default all values should be cast to strings.  This is
+      #        because the input is read from a Fortran name list file, and
+      #        Fortran allows scientific notation with a "d" instead of an "e"
+      #        to specify double-precision, so I run a replace on all values,
+      #        which requires that the values be strings.  The exception is
+      #        values that require special handling anyway, so that they are
+      #        not run through the default process.
       inputs_dict = {"gamma" : str(4.0 / 3.0),
                      "csnd_up" : str(1.0),
                      "dens_up" : str(1.0),
@@ -245,8 +205,6 @@ class SimulationInput(object):
 
       self.__initialized = True
 
-   __construct = construct # private copy to preserve __init__ behavior
-
    #===========================================================================
    def _shape_function(self, x, y, z):
       """
@@ -259,7 +217,7 @@ class SimulationInput(object):
       """
 
       if not self.__initialized:
-         raise UninitializedObjectError()
+         raise me.UninitializedObjectError()
 
       XX = np.abs(x / self.layer_width)
 
@@ -287,7 +245,7 @@ class SimulationInput(object):
       """
 
       if not self.__initialized:
-         raise UninitializedObjectError()
+         raise me.UninitializedObjectError()
 
       grav = np.zeros((x.shape[0], y.shape[1], z.shape[2], 3))
       grav[...,0] = self._grav_coef * self._shape_function(x,y,z)
@@ -307,26 +265,69 @@ class SimulationInput(object):
       """
 
       if not self.__initialized:
-         raise UninitializedObjectError()
+         raise me.UninitializedObjectError()
 
       return (self._heat_coef * density * self._shape_function(x, y, z))
 
 # End class SimulationInput
 #==============================================================================
+#------------------------------------------------------------------------------
 
 
 
-
-
-
-
-
-
-
-
-
+#------------------------------------------------------------------------------
 #==============================================================================
+class SimulationVariable(object):
+   """
+   A variable, including a function to compute it and how it relates to zero.
 
+   The SimulationState "knows" a collection of variables.  To "know" a
+   variable, it must have one or more names (held by SimulationState to be
+   hashable, although SimulationVariable will hold a default name) and two
+   attributes (held by SimulationVariable): a function to compute the variable
+   and a parameter describing how the variable relates to zero (generally one
+   of "lower bound", "center", or None).  SimulationState is the object that
+   knows the variables, and SimulationVariable is only a convenience object to
+   package that information together.  Thus the SimulationVariable object is
+   mostly dummy information that will be filled in by the SimulationState when
+   it generates its collection of known variables.
+
+   Attributes:
+      name (str) : the name of the variable
+      zero (str) : how the variable relates to the "special" value of zero
+   """
+
+   #===========================================================================
+   def __repr__(self):
+      """
+      Supply a detailed representation of the class.
+      """
+      return "SimulationVariable (" + self.name + ")"
+
+   #===========================================================================
+   def __str__(self):
+      """
+      Supply a simple representation of the class.
+      """
+      return self.name
+
+   #===========================================================================
+   def __init__(self, name, function, zero):
+      """
+      Initialize the variable.
+      """
+      self.name = name
+      self.compute = function
+      self.zero = zero
+
+# End class SimulationVariable
+#==============================================================================
+#------------------------------------------------------------------------------
+
+
+
+#------------------------------------------------------------------------------
+#==============================================================================
 class SimulationState(object):
    """
    The current state of a simulation, with methods to extract quantities.
@@ -337,10 +338,11 @@ class SimulationState(object):
    DumsesData class, to which this is closely related (and a method exists to
    construct the SimulationState from a DumsesData because of this close
    relation).  The primary difference is that the SimulationState will also
-   have a routine that accepts the name of a variable and of a mode, which will
-   use private methods to compute the desired variable in the specified mode.
-   Having a separate class also allows me to tweak the internals to fit my
-   needs without changing the standard DumsesData class (e.g. if I find time to
+   have a routine that accepts the name of a variable and the name of a state
+   (full state or base state), which will use private methods to compute the
+   desired variable in the specified state.  Having a separate class also
+   allows me to tweak the internals to fit my needs without changing the
+   standard DumsesData class (e.g. the names of variables, or if I find time to
    update this to be parallel so that I can visualize large simulations that
    would fill the memory on a single core).
 
@@ -357,10 +359,7 @@ class SimulationState(object):
       z (numpy.ndarray) : z coordinates array
       t (float) : time
       params (SimulationInputs) : important parameters from inputs file
-      _variable_functions (dict) : known variables and associated functions
-      known_variables (list of strings) : list of the names of known variables
-      _mode_codes (dict) : known modes and associated codes
-      known_modes (list of strings) : list of the names of known modes
+      known_variables (list of SimulationVariables) : list of known variables
    """
 
    #===========================================================================
@@ -379,24 +378,177 @@ class SimulationState(object):
       return string
 
    #===========================================================================
-   def __init__(self):
+   def __str__(self):
       """
-      A bare initialization method for an empty class.
+      Supply a simple representation of the class.
       """
-
-      self.__clear()
+      if self.__initialized:
+         string = "Simulation data (initialized)"
+      else:
+         string = "Simulation data (uninitialized)"
+      return string
 
    #===========================================================================
-   def __init__(self, dumpy, input_parameters):
+   def __init__(self, *args, **kwargs):
       """
-      Initialize the SimulationState from the supplied information.
-
-      Arguments:
-         dumpy (DumsesData) : to be used as a basis to construct this object
-         input_parameters (SimulationInputs) : parameters from inputs file
+      Select the appropriate initialization method.
       """
 
-      self.__construct(dumpy, input_parameters)
+      if len(args) == 0:
+         self.clear()
+      elif len(args) == 2:
+         self.construct(*args)
+      else:
+         # TODO : What is the appropriate error here?
+         raise me.InvalidParameterError("nargs", len(args))
+
+      # Generate the collection of known variables with appropriate function
+      # bindings.  Some variables will have multiple aliases, so they will be
+      # constructed once with a default name and saved under multiple keys.
+      self.known_variables = {}
+
+      var = SimulationVariable("density", self._func_density, "lower bound")
+      names = ["density", "mass density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("x momentum", self._func_x_momentum, "center")
+      names = ["x momentum", "x momentum density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("y momentum", self._func_y_momentum, "center")
+      names = ["y momentum", "y momentum density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("z momentum", self._func_z_momentum, "center")
+      names = ["z momentum", "z momentum density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("momentum magnitude",
+            self._func_momentum_magnitude, "lower bound")
+      names = ["momentum magnitude", "momentum density magnitude"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("x velocity", self._func_x_velocity, "center")
+      names = ["x velocity", "specific x momentum"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("y velocity", self._func_y_velocity, "center")
+      names = ["y velocity", "specific y momentum"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("z velocity", self._func_z_velocity, "center")
+      names = ["z velocity", "specific z momentum"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable( "velocity magnitude",
+            self._func_velocity_magnitude, "lower bound")
+      names = ["velocity magnitude", "specific momentum magnitude"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("x vorticity", self._func_x_vorticity, "center")
+      names = ["x vorticity"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("y vorticity", self._func_y_vorticity, "center")
+      names = ["y vorticity"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("z vorticity", self._func_z_vorticity, "center")
+      names = ["z vorticity"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("vorticity magnitude",
+            self._func_vorticity_magnitude, "lower bound")
+      names = ["vorticity magnitude"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific x vorticity",
+            self._func_x_specific_vorticity, "center")
+      names = ["specific x vorticity"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific y vorticity",
+            self._func_y_specific_vorticity, "center")
+      names = ["specific y vorticity"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific z vorticity",
+            self._func_z_specific_vorticity, "center")
+      names = ["specific z vorticity"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific vorticity magnitude",
+            self._func_specific_vorticity_magnitude, "lower bound")
+      names = ["specific vorticity magnitude"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("kinetic energy density",
+            self._func_kinetic_energy_density, "lower bound")
+      names = ["kinetic energy density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific kinetic energy",
+            self._func_kinetic_energy_specific, "lower bound")
+      names = ["specific kinetic energy"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("total energy density",
+            self._func_total_energy_density, "lower bound")
+      names = ["total energy density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific total energy",
+            self._func_total_energy_specific, "lower bound")
+      names = ["specific total energy"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("internal energy density",
+            self._func_internal_energy_density, "lower bound")
+      names = ["internal energy density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific internal energy",
+            self._func_internal_energy_specific, "lower bound")
+      names = ["specific internal energy"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("pressure", self._func_pressure, "lower bound")
+      names = ["pressure"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("entropy", self._func_entropy_specific, None)
+      names = ["entropy", "specific entropy"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("entropy density",
+            self._func_entropy_density, None)
+      names = ["entropy density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("sound speed",
+            self._func_sound_speed, "lower bound")
+      names = ["sound speed"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("Mach number",
+            self._func_Mach_number, "lower bound")
+      names = ["Mach number"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("specific enthalpy",
+            self._func_enthalpy_specific, "lower bound")
+      names = ["specific enthalpy"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("enthalpy density",
+            self._func_enthalpy_density, "lower bound")
+      names = ["enthalpy density"]
+      self.known_variables.update(dict.fromkeys(names, var))
+
+      var = SimulationVariable("convective growth rate",
+            self._func_convective_growth_rate, "lower bound")
+      names = ["convective growth rate", "Brunt-Vaisala frequency"]
+      self.known_variables.update(dict.fromkeys(names, var))
 
    #===========================================================================
    def clear(self):
@@ -422,8 +574,6 @@ class SimulationState(object):
 
       self.params = None
 
-   __clear = clear # private copy to preserve __init__ behavior
-
    #===========================================================================
    def construct(self, dumpy, input_parameters):
       """
@@ -433,6 +583,9 @@ class SimulationState(object):
          dumpy (DumsesData) : to be used as a basis to construct this object
          input_parameters (SimulationInputs) : parameters from inputs file
       """
+
+      # TODO : Check all values are valid before saving (so you don't get a
+      #        mixed state halfway between the new and old values).
 
       self.params = input_parameters
 
@@ -463,259 +616,27 @@ class SimulationState(object):
 
       self.__initialized = True
 
-   __construct = construct # private copy to preserve __init__ behavior
-
    #===========================================================================
-   # TODO : Is SimulationData the best place for this?  There should be a
-   # better way to implement this that does not require an instance of
-   # SimulationData, but still ties it to the lists of known variables and
-   # modes.  Perhaps a public dictionary would be more effective.
-   def bounds_type(self, variable_name, mode):
-      """
-      Specify the structure of the bounds.
-
-      Most physical quantities consider zero to be a special value.  In some
-      cases, zero is a lower bound.  An example of this would be density, where
-      a negative density has no physical meaning, so that physically density
-      may only be zero or positive.  We refer to these quantities as
-      "non-negative".  In other cases, zero is a central value.  An example of
-      this would be x-velocity, where we want to preserve zero in the center of
-      the range to clearly demonstrate both magnitude and direction.  We refer
-      to these quantities as "symmetric".  Other quantities make no reference
-      to zero as a significant value.  An example of this would be entropy,
-      where an arbitrary shift may be applied as only entropy differences are
-      physical.  We refer to these quantities as "general".  This routine
-      determines, based on the variable and mode, which type of bounds is
-      appropriate for plotting.
-
-      Arguments:
-         variable_name (string) : name of the variable
-         mode (ModeDescriptor) : mode for extracting the data
-      """
-
-      if variable_name not in self.known_variables:
-         raise InvalidVariableError(variable_name)
-
-      if mode.transform == "none":
-         # Get the appropriate variable function
-         # TODO : This can be better implemented, but for the moment it is a
-         #        functional (if inelegant) placeholder.
-         if variable_name == "density":
-            return "non-negative"
-         elif variable_name == "x momentum":
-            return "symmetric"
-         elif variable_name == "y momentum":
-            return "symmetric"
-         elif variable_name == "z momentum":
-            return "symmetric"
-         elif variable_name == "momentum magnitude":
-            return "non-negative"
-         elif variable_name == "x velocity":
-            return "symmetric"
-         elif variable_name == "y velocity":
-            return "symmetric"
-         elif variable_name == "z velocity":
-            return "symmetric"
-         elif variable_name == "velocity magnitude":
-            return "non-negative"
-         elif variable_name == "x vorticity":
-            return "symmetric"
-         elif variable_name == "y vorticity":
-            return "symmetric"
-         elif variable_name == "z vorticity":
-            return "symmetric"
-         elif variable_name == "vorticity magnitude":
-            return "non-negative"
-         elif variable_name == "specific x vorticity":
-            return "symmetric"
-         elif variable_name == "specific y vorticity":
-            return "symmetric"
-         elif variable_name == "specific z vorticity":
-            return "symmetric"
-         elif variable_name == "specific vorticity magnitude":
-            return "non-negative"
-         elif variable_name == "kinetic energy density":
-            return "non-negative"
-         elif variable_name == "specific kinetic energy":
-            return "non-negative"
-         elif variable_name == "total energy density":
-            return "non-negative"
-         elif variable_name == "specific total energy":
-            return "non-negative"
-         elif variable_name == "internal energy density":
-            return "non-negative"
-         elif variable_name == "specific internal energy":
-            return "non-negative"
-         elif variable_name == "pressure":
-            return "non-negative"
-         elif variable_name == "specific entropy":
-            return "general"
-         elif variable_name == "entropy density":
-            return "general"
-         elif variable_name == "sound speed":
-            return "non-negative"
-         elif variable_name == "Mach number":
-            return "non-negative"
-         elif variable_name == "specific enthalpy":
-            return "non-negative"
-         elif variable_name == "enthalpy density":
-            return "non-negative"
-         elif variable_name == "convective growth rate":
-            return "non-negative"
-         else:
-            raise InvalidVariableError(variable_name)
-         #try:
-         #   func = self._variable_functions[variable_name]
-         #except KeyError, ke:
-         #   raise InvalidVariableError(str(ke))
-      elif mode.transform in ["perturbation", "contrast"]:
-         if mode.absolute:
-            return "non-negative"
-         else:
-            return "symmetric"
-      else:
-         raise InvalidModeError(mode_name)
-
-   #===========================================================================
-   def extract(self, variable_name, mode):
+   def extract(self, variable_name, full_state=True):
       """
       Extract the desired variable in the desired mode.
 
       Arguments:
          variable_name (string) : name of the variable to be extracted
-         mode (ModeDescriptor) : mode for extracting the data
+         full_state (bool) : return full state (True) or base state (False)
       """
 
       if not self.__initialized:
          raise UninitializedObjectError()
 
       # Get the appropriate variable function
-      # TODO : This can be better implemented, but for the moment it is a
-      #        functional (if inelegant) placeholder.  It would be better to
-      #        use a dictionary to allow hashing, but I had some issues on the
-      #        first pass and decided to save it for later.  See the notes
-      #        below (by the known_variables attribute) for some comments.
-      if variable_name == "density":
-         func = self._func_density
-      elif variable_name == "x momentum":
-         func = self._func_x_momentum
-      elif variable_name == "y momentum":
-         func = self._func_y_momentum
-      elif variable_name == "z momentum":
-         func = self._func_z_momentum
-      elif variable_name == "momentum magnitude":
-         func = self._func_momentum_magnitude
-      elif variable_name == "x velocity":
-         func = self._func_x_velocity
-      elif variable_name == "y velocity":
-         func = self._func_y_velocity
-      elif variable_name == "z velocity":
-         func = self._func_z_velocity
-      elif variable_name == "velocity magnitude":
-         func = self._func_velocity_magnitude
-      elif variable_name == "x vorticity":
-         func = self._func_x_vorticity
-      elif variable_name == "y vorticity":
-         func = self._func_y_vorticity
-      elif variable_name == "z vorticity":
-         func = self._func_z_vorticity
-      elif variable_name == "vorticity magnitude":
-         func = self._func_vorticity_magnitude
-      elif variable_name == "specific x vorticity":
-         func = self._func_x_specific_vorticity
-      elif variable_name == "specific y vorticity":
-         func = self._func_y_specific_vorticity
-      elif variable_name == "specific z vorticity":
-         func = self._func_z_specific_vorticity
-      elif variable_name == "specific vorticity magnitude":
-         func = self._func_specific_vorticity_magnitude
-      elif variable_name == "kinetic energy density":
-         func = self._func_kinetic_energy_density
-      elif variable_name == "specific kinetic energy":
-         func = self._func_kinetic_energy_specific
-      elif variable_name == "total energy density":
-         func = self._func_total_energy_density
-      elif variable_name == "specific total energy":
-         func = self._func_total_energy_specific
-      elif variable_name == "internal energy density":
-         func = self._func_internal_energy_density
-      elif variable_name == "specific internal energy":
-         func = self._func_internal_energy_specific
-      elif variable_name == "pressure":
-         func = self._func_pressure
-      elif variable_name == "specific entropy":
-         func = self._func_entropy_specific
-      elif variable_name == "entropy density":
-         func = self._func_entropy_density
-      elif variable_name == "sound speed":
-         func = self._func_sound_speed
-      elif variable_name == "Mach number":
-         func = self._func_Mach_number
-      elif variable_name == "specific enthalpy":
-         func = self._func_enthalpy_specific
-      elif variable_name == "enthalpy density":
-         func = self._func_enthalpy_density
-      elif variable_name == "convective growth rate":
-         func = self._func_convective_growth_rate
-      else:
-         raise InvalidVariableError(variable_name)
-      #try:
-      #   func = self._variable_functions[variable_name]
-      #except KeyError, ke:
-      #   raise InvalidVariableError(str(ke))
-
-      # The only time we don't need
-
-
-
-
-
-      # Get the appropriate mode code
       try:
-         code = self._mode_codes[mode_name]
+         func = self.known_variables[variable_name].compute
       except KeyError, ke:
-         raise InvalidModeError(str(ke))
+         # TODO : Is this the appropriate error?
+         raise InvalidVariableError(str(ke))
 
-      # Compute the correct mode
-      if self._mode_codes[mode_name] == 0:
-         # Mode 0: full state
-         var = func('full state')
-      else:
-         # Any other mode: compare against some reference state
-         if code > 0:
-            # Positive mode: compare against the base state
-            ref = func('base state')
-         else: # code < 0
-            # Negative mode: compare against the mean state
-            ref = func('full state')
-            shape = ref.shape
-            ref = np.mean(ref.reshape((shape[0], shape[1]*shape[2])), axis=1)
-            newshape = np.ones_like(shape)
-            newshape[0] = shape[0]
-            ref = ref.reshape(newshape)
-            ref = ref.repeat(shape[1], axis=1).repeat(shape[2], axis=2)
-         # Now that we've selected the correct reference state, only the
-         # absolute value of the code matters
-         abscode = abs(code)
-         if abscode == 1:
-            # |Mode| == 1: reference state
-            var = ref
-         else:
-            # Otherwise: we are looking at the perturbation relative to the
-            # reference state
-            var = func('full state') - ref
-            # |Mode| == 2: perturbation
-            if abscode == 3:
-               # |Mode| == 3: absolute value of the perturbation
-               var = np.abs(var)
-            elif abscode > 3:
-               # Otherwise: we are looking at the contrast (the perturbation
-               # scaled against the reference state)
-               var = var / ref
-               # |Mode| == 4: contrast (nothing more needed)
-               # |Mode| == 5: absolute value of the contrast
-               if abscode == 5:
-                  var = np.abs(var)
+      var = func(full_state)
 
       return var
 
@@ -814,417 +735,405 @@ class SimulationState(object):
       return dqdz
 
    #===========================================================================
-   def _func_density(self, full_or_base):
+   def _func_density(self, full_state):
       """
       Extract the density in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_or_base == "full state":
+      if full_state:
          return self._dens
-      elif full_or_base == "base state":
-         return self._dens0
       else:
-         raise InvalidModeError(full_or_base)
+         return self._dens0
 
    #===========================================================================
-   def _func_x_momentum(self, full_or_base):
+   def _func_x_momentum(self, full_state):
       """
       Extract the x-momentum in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_or_base == "full state":
+      if full_state:
          return self._momv[:,:,:,0]
-      elif full_or_base == "base state":
-         return self._momv0
       else:
-         raise InvalidModeError(full_or_base)
+         return self._momv0
 
    #===========================================================================
-   def _func_y_momentum(self, full_or_base):
+   def _func_y_momentum(self, full_state):
       """
       Extract the y-momentum in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_or_base == "full state":
+      if full_state:
          return self._momv[:,:,:,1]
-      elif full_or_base == "base state":
-         return np.zeros_like(self._momv0)
       else:
-         raise InvalidModeError(full_or_base)
+         return np.zeros_like(self._momv0)
 
    #===========================================================================
-   def _func_z_momentum(self, full_or_base):
+   def _func_z_momentum(self, full_state):
       """
       Extract the z-momentum in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_or_base == "full state":
+      if full_state:
          return self._momv[:,:,:,2]
-      elif full_or_base == "base state":
-         return np.zeros_like(self._momv0)
       else:
-         raise InvalidModeError(full_or_base)
+         return np.zeros_like(self._momv0)
 
    #===========================================================================
-   def _func_momentum_magnitude(self, full_or_base):
+   def _func_momentum_magnitude(self, full_state):
       """
       Extract the magnitude of the momentum in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_or_base == "full state":
+      if full_state:
          return np.sqrt(np.sum(self._momv**2, axis=-1))
-      elif full_or_base == "base state":
-         return np.abs(self._momv0)
       else:
-         raise InvalidModeError(full_or_base)
+         return np.abs(self._momv0)
 
    #===========================================================================
-   def _func_x_velocity(self, full_or_base):
+   def _func_x_velocity(self, full_state):
       """
       Extract the x-velocity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_x_momentum(full_or_base) / \
-             self._func_density(full_or_base)
+      return self._func_x_momentum(full_state) / \
+             self._func_density(full_state)
 
    #===========================================================================
-   def _func_y_velocity(self, full_or_base):
+   def _func_y_velocity(self, full_state):
       """
       Extract the y-velocity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_y_momentum(full_or_base) / \
-             self._func_density(full_or_base)
+      return self._func_y_momentum(full_state) / \
+             self._func_density(full_state)
 
    #===========================================================================
-   def _func_z_velocity(self, full_or_base):
+   def _func_z_velocity(self, full_state):
       """
       Extract the z-velocity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_z_momentum(full_or_base) / \
-             self._func_density(full_or_base)
+      return self._func_z_momentum(full_state) / \
+             self._func_density(full_state)
 
    #===========================================================================
-   def _func_velocity_magnitude(self, full_or_base):
+   def _func_velocity_magnitude(self, full_state):
       """
       Extract the magnitude of the velocity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_momentum_magnitude(full_or_base) / \
-             self._func_density(full_or_base)
+      return self._func_momentum_magnitude(full_state) / \
+             self._func_density(full_state)
 
    #===========================================================================
-   def _func_x_vorticity(self, full_or_base):
+   def _func_x_vorticity(self, full_state):
       """
       Extract the x-vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      vely = self._func_y_velocity(full_or_base)
-      velz = self._func_z_velocity(full_or_base)
+      vely = self._func_y_velocity(full_state)
+      velz = self._func_z_velocity(full_state)
       vrtx = self._y_derivative(velz) - self._z_derivative(vely)
       return vrtx
 
    #===========================================================================
-   def _func_y_vorticity(self, full_or_base):
+   def _func_y_vorticity(self, full_state):
       """
       Extract the y-vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      velx = self._func_x_velocity(full_or_base)
-      velz = self._func_z_velocity(full_or_base)
+      velx = self._func_x_velocity(full_state)
+      velz = self._func_z_velocity(full_state)
       vrty = self._z_derivative(velx) - self._x_derivative(velz)
       return vrty
 
    #===========================================================================
-   def _func_z_vorticity(self, full_or_base):
+   def _func_z_vorticity(self, full_state):
       """
       Extract the z-vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      velx = self._func_x_velocity(full_or_base)
-      vely = self._func_y_velocity(full_or_base)
+      velx = self._func_x_velocity(full_state)
+      vely = self._func_y_velocity(full_state)
       vrtz = self._x_derivative(vely) - self._y_derivative(velx)
       return vrtz
 
    #===========================================================================
-   def _func_vorticity_magnitude(self, full_or_base):
+   def _func_vorticity_magnitude(self, full_state):
       """
       Extract the magnitude of the vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtx = self._func_x_vorticity(full_or_base)
-      vrty = self._func_y_vorticity(full_or_base)
-      vrtz = self._func_z_vorticity(full_or_base)
+      vrtx = self._func_x_vorticity(full_state)
+      vrty = self._func_y_vorticity(full_state)
+      vrtz = self._func_z_vorticity(full_state)
       magnitude = np.sqrt(vrtx**2 + vrty**2 + vrtz**2)
       return magnitude
 
    #===========================================================================
-   def _func_x_specific_vorticity(self, full_or_base):
+   def _func_x_specific_vorticity(self, full_state):
       """
       Extract the specific x-vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtx = self._func_x_vorticity(full_or_base)
-      dens = self._func_density(full_or_base)
+      vrtx = self._func_x_vorticity(full_state)
+      dens = self._func_density(full_state)
       return vrtx / dens
 
    #===========================================================================
-   def _func_y_specific_vorticity(self, full_or_base):
+   def _func_y_specific_vorticity(self, full_state):
       """
       Extract the specific y-vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrty = self._func_y_vorticity(full_or_base)
-      dens = self._func_density(full_or_base)
+      vrty = self._func_y_vorticity(full_state)
+      dens = self._func_density(full_state)
       return vrty / dens
 
    #===========================================================================
-   def _func_z_specific_vorticity(self, full_or_base):
+   def _func_z_specific_vorticity(self, full_state):
       """
       Extract the specific z-vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtz = self._func_z_vorticity(full_or_base)
-      dens = self._func_density(full_or_base)
+      vrtz = self._func_z_vorticity(full_state)
+      dens = self._func_density(full_state)
       return vrtz / dens
 
    #===========================================================================
-   def _func_specific_vorticity_magnitude(self, full_or_base):
+   def _func_specific_vorticity_magnitude(self, full_state):
       """
       Extract the magnitude of the specific vorticity in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtx = self._func_x_vorticity(full_or_base)
-      vrty = self._func_y_vorticity(full_or_base)
-      vrtz = self._func_z_vorticity(full_or_base)
+      vrtx = self._func_x_vorticity(full_state)
+      vrty = self._func_y_vorticity(full_state)
+      vrtz = self._func_z_vorticity(full_state)
       magnitude = np.sqrt(vrtx**2 + vrty**2 + vrtz**2)
-      dens = self._func_density(full_or_base)
+      dens = self._func_density(full_state)
       return magnitude / dens
 
    #===========================================================================
-   def _func_kinetic_energy_density(self, full_or_base):
+   def _func_kinetic_energy_density(self, full_state):
       """
       Extract the kinetic energy density in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      momentum = self._func_momentum_magnitude(full_or_base)
-      kinetic = 0.5 * momentum**2 / self._func_density(full_or_base)
+      momentum = self._func_momentum_magnitude(full_state)
+      kinetic = 0.5 * momentum**2 / self._func_density(full_state)
       return kinetic
 
    #===========================================================================
-   def _func_kinetic_energy_specific(self, full_or_base):
+   def _func_kinetic_energy_specific(self, full_state):
       """
       Extract the specific kinetic energy in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      momentum = self._func_momentum_magnitude(full_or_base)
-      kinetic = 0.5 * (momentum / self._func_density(full_or_base))**2
+      momentum = self._func_momentum_magnitude(full_state)
+      kinetic = 0.5 * (momentum / self._func_density(full_state))**2
       return kinetic
 
    #===========================================================================
-   def _func_total_energy_density(self, full_or_base):
+   def _func_total_energy_density(self, full_state):
       """
       Extract the total energy density in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_or_base == "full state":
+      if full_state:
          return self._Ener
-      elif full_or_base == "base state":
-         return self._Ener0
       else:
-         raise InvalidModeError(full_or_base)
+         return self._Ener0
 
    #===========================================================================
-   def _func_total_energy_specific(self, full_or_base):
+   def _func_total_energy_specific(self, full_state):
       """
       Extract the specific total energy in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      Ener = self._func_total_energy_density(full_or_base) / \
-             self._func_density(full_or_base)
+      Ener = self._func_total_energy_density(full_state) / \
+             self._func_density(full_state)
 
       return Ener
 
    #===========================================================================
-   def _func_internal_energy_density(self, full_or_base):
+   def _func_internal_energy_density(self, full_state):
       """
       Extract the internal energy density in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_total_energy_density(full_or_base) - \
-             self._func_kinetic_energy_density(full_or_base)
+      return self._func_total_energy_density(full_state) - \
+             self._func_kinetic_energy_density(full_state)
 
    #===========================================================================
-   def _func_internal_energy_specific(self, full_or_base):
+   def _func_internal_energy_specific(self, full_state):
       """
       Extract the specific internal energy in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_total_energy_specific(full_or_base) - \
-             self._func_kinetic_energy_specific(full_or_base)
+      return self._func_total_energy_specific(full_state) - \
+             self._func_kinetic_energy_specific(full_state)
 
    #===========================================================================
-   def _func_pressure(self, full_or_base):
+   def _func_pressure(self, full_state):
       """
       Extract the pressure in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_internal_energy_density(full_or_base) * \
+      return self._func_internal_energy_density(full_state) * \
              (self.params.gamma - 1.0)
 
    #===========================================================================
-   def _func_entropy_specific(self, full_or_base):
+   def _func_entropy_specific(self, full_state):
       """
       Extract the specific entropy in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      PP = self._func_pressure(full_or_base) / self.params.pres_up
-      dd = self._func_density(full_or_base) / self.params.dens_up
+      PP = self._func_pressure(full_state) / self.params.pres_up
+      dd = self._func_density(full_state) / self.params.dens_up
       Y = self.params.gamma
       return np.log(PP * dd**(-Y)) / (Y - 1.0)
 
    #===========================================================================
-   def _func_entropy_density(self, full_or_base):
+   def _func_entropy_density(self, full_state):
       """
       Extract the entropy density in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_entropy_specific(full_or_base) * \
-             self._func_density(full_or_base)
+      return self._func_entropy_specific(full_state) * \
+             self._func_density(full_state)
 
    #===========================================================================
-   def _func_sound_speed(self, full_or_base):
+   def _func_sound_speed(self, full_state):
       """
       Extract the speed of sound in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      c2 = self.params.gamma * self._func_pressure(full_or_base) / \
-            self._func_density(full_or_base)
+      c2 = self.params.gamma * self._func_pressure(full_state) / \
+            self._func_density(full_state)
       return np.sqrt(c2)
 
    #===========================================================================
-   def _func_Mach_number(self, full_or_base):
+   def _func_Mach_number(self, full_state):
       """
       Extract the Mach number in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_velocity_magnitude(full_or_base) / \
-             self._func_sound_speed(full_or_base)
+      return self._func_velocity_magnitude(full_state) / \
+             self._func_sound_speed(full_state)
 
    #===========================================================================
-   def _func_enthalpy_specific(self, full_or_base):
+   def _func_enthalpy_specific(self, full_state):
       """
       Extract the specific enthalpy in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      u = self._func_internal_energy_specific(full_or_base)
-      pdv = self._func_pressure(full_or_base) / \
-            self._func_density(full_or_base)
+      u = self._func_internal_energy_specific(full_state)
+      pdv = self._func_pressure(full_state) / \
+            self._func_density(full_state)
       return u + pdv
 
    #===========================================================================
-   def _func_enthalpy_density(self, full_or_base):
+   def _func_enthalpy_density(self, full_state):
       """
       Extract the enthalpy density in the desired mode.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
-      u = self._func_internal_energy_density(full_or_base)
-      pdv = self._func_pressure(full_or_base)
+      u = self._func_internal_energy_density(full_state)
+      pdv = self._func_pressure(full_state)
       return u + pdv
 
    #===========================================================================
-   def _func_convective_growth_rate(self, full_or_base):
+   def _func_convective_growth_rate(self, full_state):
       """
       Extract the convective growth rate in the desired mode.
 
@@ -1240,11 +1149,11 @@ class SimulationState(object):
       the gradient of the base state specific entropy.
 
       Arguments:
-         full_or_base (string) : name of the mode to use
+         full_state (bool) : return full state (True) or base state (False)
       """
 
       g = self.params.gravity(self.x, self.y, self.z)
-      s = self._func_entropy_specific(full_or_base)
+      s = self._func_entropy_specific(full_state)
       grad_s_x = self._x_derivative(s)
       grad_s_y = self._y_derivative(s)
       grad_s_z = self._z_derivative(s)
@@ -1256,97 +1165,7 @@ class SimulationState(object):
       BV_squared[BV_squared > 0] = 0.0
       return np.sqrt(-BV_squared)
 
-   #===========================================================================
-
-   # NOTE : The method commented out had issues getting the bindings correct.
-   # I have to think more about how to do this properly.  For now, I just have
-   # to duplicate the list of "known" variables.
-   ## This is the list of known quantities and the corresponding dictionary
-   ## pointing to the associated functions.  Since we are processing strings
-   ## anyway, instead of having short, "variable-like" names, we use longer,
-   ## more-descriptive names.
-   #_variable_functions = \
-   #   {"density" : self._func_density,
-   #    "x momentum" : self._func_x_momentum,
-   #    "y momentum" : self._func_y_momentum,
-   #    "z momentum" : self._func_z_momentum,
-   #    "momentum magnitude" : self._func_momentum_magnitude,
-   #    "x velocity" : self._func_x_velocity,
-   #    "y velocity" : self._func_y_velocity,
-   #    "z velocity" : self._func_z_velocity,
-   #    "velocity magnitude" : self._func_velocity_magnitude,
-   #    "x vorticity" : self._func_x_vorticity,
-   #    "y vorticity" : self._func_y_vorticity,
-   #    "z vorticity" : self._func_z_vorticity,
-   #    "vorticity magnitude" : self._func_vorticity_magnitude,
-   #    "specific x vorticity" : self._func_x_specific_vorticity,
-   #    "specific y vorticity" : self._func_y_specific_vorticity,
-   #    "specific z vorticity" : self._func_z_specific_vorticity,
-   #    "specific vorticity magnitude" : self._func_specific_vorticity_magnitude,
-   #    "kinetic energy density" : self._func_kinetic_energy_density,
-   #    "specific kinetic energy" : self._func_kinetic_energy_specific,
-   #    "total energy density" : self._func_total_energy_density,
-   #    "specific total energy" : self._func_total_energy_specific,
-   #    "internal energy density" : self._func_internal_energy_density,
-   #    "specific internal energy" : self._func_internal_energy_specific,
-   #    "pressure" : self._func_pressure,
-   #    "specific entropy" : self._func_entropy_specific,
-   #    "entropy density" : self._func_entropy_density,
-   #    "sound speed" : self._func_sound_speed,
-   #    "Mach number" : self._func_Mach_number,
-   #    "specific enthalpy" : self._func_enthalpy_specific,
-   #    "enthalpy density" : self._func_enthalpy_density,
-   #    "convective growth rate" : self._func_convective_growth_rate}
-   #known_variables = tuple(_variable_functions.keys())
-   known_variables = ("density",
-       "x momentum",
-       "y momentum",
-       "z momentum",
-       "momentum magnitude",
-       "x velocity",
-       "y velocity",
-       "z velocity",
-       "velocity magnitude",
-       "x vorticity",
-       "y vorticity",
-       "z vorticity",
-       "vorticity magnitude",
-       "specific x vorticity",
-       "specific y vorticity",
-       "specific z vorticity",
-       "specific vorticity magnitude",
-       "kinetic energy density",
-       "specific kinetic energy",
-       "total energy density",
-       "specific total energy",
-       "internal energy density",
-       "specific internal energy",
-       "pressure",
-       "specific entropy",
-       "entropy density",
-       "sound speed",
-       "Mach number",
-       "specific enthalpy",
-       "enthalpy density",
-       "convective growth rate")
-
-   # This is the list of known modes.  Since we are processing strings anyway,
-   # instead of having short, "variable-like" names, we use longer,
-   # more-descriptive names.
-   _mode_codes = \
-      {"full state" : 0,
-       "base state" : 1,
-       "perturbation" : 2,
-       "absolute perturbation" : 3,
-       "contrast" : 4,
-       "absolute contrast" : 5,
-       "mean state" : -1,
-       "residual" : -2,
-       "absolute residual" : -3,
-       "fractional residual" : -4,
-       "absolute fractional residual" : -5}
-   known_modes = tuple(_mode_codes.keys())
-
 # End class SimulationState
 #==============================================================================
+#------------------------------------------------------------------------------
 
