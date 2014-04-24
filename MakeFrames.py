@@ -313,14 +313,14 @@ def panel_profile(state, movie, ax_prof, state0=None):
       max0 = np.amax(view, axis=1)
 
    if movie.mode.transform == "none":
-      base = np.zeros_like(mean)
-   else:
       movie_copy = copy.deepcopy(movie)
       movie_copy.mode.absolute = False
       movie_copy.mode.transform = "none"
       movie_copy.mode.reference = "base"
       data, x2, y2, z2, vlo2, vhi2 = movie_copy.frame_data(state)
       base = data[:,0,0]
+   else:
+      base = np.zeros_like(mean)
 
    x = x[:,0,0]
 
