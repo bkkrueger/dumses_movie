@@ -22,12 +22,6 @@ Attributes:
    panel_panel : draws a 1D profile plot on a given axes
 """
 
-# TODO : When going back through and cleaning up the errors/exceptions/warnings
-#        throughout the code, I should add notes to the docstrings regarding
-#        what sorts of errors may arise from each method/object.  That way I
-#        can better set up my try/except blocks, based on actually knowing what
-#        to catch.
-
 # TODO : Idea: Allow specification of colorbar limits as function of time.
 #        Currently I allow a static colorbar minimum/maximum, but can this be
 #        extended in some way to be time-dependent?  In theory, yes: a list of
@@ -389,6 +383,11 @@ def panel_profile(state, movie, ax_prof, state0=None):
    # Split the axes in half
    divider = make_axes_locatable(ax_prof)
    ax_stdv = divider.append_axes("bottom", size="40%", pad=0.1)
+
+   # TODO : If the data is a vertical or horizontal line (all x- or
+   #        y-coordinates are the same), then a warning appears.  Look into
+   #        whether or not that can be silenced elegantly without hiding
+   #        anything important.
 
    # Draw the top plot
    if state0 is not None:

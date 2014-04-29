@@ -9,7 +9,7 @@ maker.
 
 # TODO : Develop an extensive testing suite
 
-# TODO : Check all class docstrings and add methods list
+from __future__ import division
 
 #==============================================================================
 #------------------------------------------------------------------------------
@@ -23,8 +23,6 @@ import sys
 sys.path.append("/Users/bkrueger/research/CCSNe/heating_layer/results/sample/dumses/visu")
 #------------------------------------------------------------------------------
 #==============================================================================
-
-from __future__ import division
 
 import argparse as ap
 import glob
@@ -87,7 +85,7 @@ if __name__ == "__main__":
    if ProcID == 0:
       full_list = sorted(glob.glob(args.directory + "output_*"))
       if NProcs > 1:
-         ihi = len(full_list) // Nprocs
+         ihi = len(full_list) // NProcs
          output_list = full_list[:ihi]
          for i in xrange(1, NProcs):
             ilo = len(full_list) * i // NProcs
@@ -124,14 +122,15 @@ if __name__ == "__main__":
             warnings.warn(msg, UserWarning)
 
    # Summarize masks and movies
-   print "="*79
-   print "found {n} masks:".format(n=len(masks))
-   for name, mask in masks.items():
-      print "   {0}:".format(name), mask
-   print "making {n} movies:".format(n=len(movies))
-   for name, movie in movies.items():
-      print "   {0}:".format(name), movie
-   print "="*79
+   if ProcID == 0:
+      print "="*79
+      print "found {n} masks:".format(n=len(masks))
+      for name, mask in masks.items():
+         print "   {0}:".format(name), mask
+      print "making {n} movies:".format(n=len(movies))
+      for name, movie in movies.items():
+         print "   {0}:".format(name), movie
+      print "="*79
 
    # Call the primary loop
    make_all_frames(output_list, movies)
