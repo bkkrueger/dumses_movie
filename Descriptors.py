@@ -424,13 +424,13 @@ class MovieDescriptor(object):
             warnings.warn(msg, UserWarning)
 
       # Value values for the mask method are "explicit" (explicitly masks
-      # values using NumPy's masked arrays), "force-lo" (force the masked cells
-      # to be equal to the lowest non-masked value in the array), "force-hi"
-      # (force the masked cells to be equal to the highest non-masked value in
-      # the array), or a floating-point number (force the masked cells to be
-      # equal to the specified value).
+      # values using NumPy's masked arrays), "force low" (force the masked
+      # cells to be equal to the lowest non-masked value in the array), "force
+      # high" (force the masked cells to be equal to the highest non-masked
+      # value in the array), or a floating-point number (force the masked cells
+      # to be equal to the specified value).
       mask_method = dictionary.get("mask_method", "explicit")
-      if mask_method not in ["explicit", "force-lo", "force-hi"]:
+      if mask_method not in ["explicit", "force low", "force high"]:
          try:
             mask_method = float(mask_method)
          except ValueError:
@@ -530,6 +530,9 @@ class MovieDescriptor(object):
       z = z[idx]
       z = z.reshape((1,1,len(z)))
 
+      # Get the bounds type (may be used in masking)
+      bounds_type = state.known_variables[self.variable].zero
+
       # Construct the overall mask (union of all masks)
       cumulative_mask = np.zeros_like(var, dtype=bool)
       for mask in self.masks:
@@ -538,17 +541,28 @@ class MovieDescriptor(object):
       # Apply the mask
       if self.mask_method == "explicit":
          var = np.ma.masked_where(cumulative_mask, var)
-      elif self.mask_method == "force-lo":
-         maskval = np.amin(var[np.logical_not(cumulative_mask)])
+      elif self.mask_method == "force low":
+         if bounds_type in ["lower bound", "center"]:
+            # The "force low" mask forces the data to the lowest value.  In a
+            # general context, that is simply the minimum value of the data
+            # array.  However, if we know that zero holds a special meaning, we
+            # can come up with a better value.  For the "lower bound" case, we
+            # know that zero is the lowest possible value, so forcing to the
+            # lowest value becomes forcing to the lowest possible value.  For
+            # the "center" case, the magnitude and the sign both have meaning,
+            # so we are forcing not to the lowest value but to the
+            # lowest-magnitude value.
+            maskval = 0.0
+         else:
+            maskval = np.amin(var[np.logical_not(cumulative_mask)])
          var[cumulative_mask] = maskval
-      elif self.mask_method == "force-hi":
+      elif self.mask_method == "force high":
          maskval = np.amax(var[np.logical_not(cumulative_mask)])
          var[cumulative_mask] = maskval
       else:
          var[cumulative_mask] = self.mask_method
 
       # Compute value limits
-      bounds_type = state.known_variables[self.variable].zero
       if bounds_type == "lower bound":
          vlo = 0.0
          vhi = (1.0 + pad_bounds) * var.max()

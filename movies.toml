@@ -22,6 +22,7 @@
    image_type = 'png'
    movie_type = 'avi'
    masks = ["buoyant"]
+   mask_method = "force low"
 
 [masks.buoyant]
    variable = 'specific entropy'

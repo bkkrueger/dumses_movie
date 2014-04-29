@@ -214,8 +214,7 @@ def make_single_frame(state, movie, directory, number, state0=None):
    ax1 = fig.add_axes([0, 0.05, 1, 0.9])
 
    # Fill the panels (Axes)
-   if movie.mode in ["profile: full state", "profile: perturbation",
-         "profile: contrast"]:
+   if movie.mode.dimension == 1:
       panel_profile(state, movie, ax1, state0)
    else:
       panel_2D_pseudocolor(state, movie, ax1)
@@ -364,7 +363,7 @@ def panel_profile(state, movie, ax_prof, state0=None):
    ax_prof.axvline(x= state.params.layer_width,color='black')
 
    # Construct the title
-   ax_prof.set_title(" ".join((movie.variable, movie.mode)))
+   ax_prof.set_title(" ".join((movie.variable, str(movie.mode))))
 
    # Label axes and set ticks
    plt.setp(ax_prof.get_xticklabels(), visible=False)
