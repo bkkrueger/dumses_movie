@@ -42,6 +42,7 @@ import os
 import warnings
 
 from dumpy_v05.data.rd_dumses import DumsesData
+import Descriptors as Desc
 import SimulationData as SD
 
 #==============================================================================
@@ -74,20 +75,25 @@ def make_all_frames(data_list, movie_list):
 
    # Remove any disallowed MovieDescriptors
    movie_list = {m : movie_list[m] for m in movie_list
-         if movie_list[m].stub not in s_blacklist}
-   movie_list = {m : movie_list[m] for m in movie_list
+         if movie_list[m].stub not in s_blacklist
          if movie_list[m].variable not in v_blacklist}
 
-   # Do any of the surviving movies need the initial state?
    profile_mode = False
    for movie in movie_list.values():
+
+      # Do any of the surviving movies need the initial state?
       if movie.dimension == 1:
          profile_mode = True
          break
 
-      # TODO : Warn users that if any of the movies have absolute paths, it is
-      #        possible to have things overwritten/interleaved unpredictably if
-      #        there are multiple data series.
+      # If any of the movies have absolute paths (allowed in general for the
+      # MovieDescriptor, because it is not tied to this set of drawing
+      # routines), warn the user that multiple data series may overwrite or
+      # interleave.
+      if os.path.isabs(movie.path):
+         msg = " ".join(("Absolute paths may cause overwriting and/or",
+            "interleaving if you have multiple data series."))
+         warnings.warn(msg, UserWarning)
 
    # Sorting makes it more likely that you'll hit the initial state before the
    # other states in the same series, thus potentially saving the need to dump
@@ -114,28 +120,31 @@ def make_all_frames(data_list, movie_list):
       #    directory (we use realpath to make sure different ways of referring
       #    to the same directory are still counted as the same series), and we
       #    assume that a series shares a common inputs file.
-      if output_name[-1] == "/":
-         output_name = output_name[:-1]
-      partition = output_name.rpartition('/')
-      path = os.path.realpath(''.join(partition[0:2]))
-      if path[-1] != "/":
-         path += "/"
+      path = os.path.dirname(os.path.realpath(output_name)) + "/"
+      filename = os.path.basename(output_name)
       try:
-         number = int(partition[2].rpartition("_")[2])
+         number = int(filename.rpartition("_")[2])
       except ValueError:
-         # TODO : Warn user that we couldn't parse the output file name
+         msg = "".join(('Unable to parse file name "', output_name,
+            '".  This file will be skipped.'))
+         warnings.warn(msg, UserWarning)
          continue
 
       # Open the input and output files to construct the state
       try:
          data = DumsesData(number, filedir=path)
       except IOError:
-         # TODO : Warn user that we couldn't open the output file
+         msg = "".join(('Unable to open data file "', output_name,
+            '".  This file will be skipped.'))
+         warnings.warn(msg, UserWarning)
          continue
       try:
          si = SD.SimulationInput(path + "input")
       except IOError:
-         # TODO : Warn user that we couldn't open the input file
+         msg = "".join((
+            'Unable to open inputs file corresponding to data file "',
+            output_name, '".  This file will be skipped.'))
+         warnings.warn(msg, UserWarning)
          continue
       state = SD.SimulationState(data, si)
 
@@ -158,9 +167,14 @@ def make_all_frames(data_list, movie_list):
 
       for movie in movie_list.values():
          if movie.within_time_limits(state.t):
-            # TODO : Catch exceptions that are recoverable (e.g., an invalid
-            #        variable) so that the other frames can be generated.
-            make_single_frame(state, movie, path, number, state0)
+            try:
+               make_single_frame(state, movie, path, number, state0)
+            except (Desc.DescriptorError, SD.SimulationError) as err:
+               msg = "".join(("While generating movie ", str(movie),
+                  " with data file " output_name,
+                  ", the following error occurred:\n   ", str(err),
+                  "\nThis frame will not be drawn."))
+               warnings.warn(msg, UserWarning)
 
 #==============================================================================
 

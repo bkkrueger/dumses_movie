@@ -18,17 +18,86 @@ The MovieWindow class describes a viewing window (limits in the coordinates)
 for plotting.  It uses a MovieLimits object for each coordinate direction.
 These two essentially exist for packaging more than functionality.
 
+The DescriptorError class describes an error raised by one of the Descriptors.
+The errors raised by them tend to be related to illegal values (or illegal
+combinations of values), so they can be logically grouped together.  Giving
+them their own class means that calling routines can catch errors raised by the
+Descriptors separately from other errors (e.g. a ValueError in something used
+by one of the Descriptors, etc).
+
 Attributes:
    MovieDescriptor (class) : a description of the movie to be made
    MaskDescriptor (class) : a description of a mask to be applied
    ModeDescriptor (class) : a description of a plotting mode
    MovieLimits (class) : low/high limits of some quantity
    MovieWindow (class) : low/high limits in 3 dimensions for a viewing space
+   DescriptorError (class) : exception for Descriptors
 """
 
 import math
 import numpy as np
 import warnings
+
+#------------------------------------------------------------------------------
+#==============================================================================
+
+class DescriptorError(StandardError):
+   """
+   Signals that a descriptor encountered an error.
+   """
+
+   def __init__(self, *args, **kwargs):
+      """
+      Initialize the exception.
+
+      Because StandardError explicitly states that it does not use any keyword
+      arguments, that gives the freedom to use any keyword arguments to
+      customize the initialization of DescriptorError.  Based on the arguments
+      supplied, the initialization selects between the following modes:
+      -- invalid=True:
+         A very common message: 'Invalid <parameter>: "<value>".', where
+         <parameter> and <value> are given as the first and second positional
+         arguments respectively.
+      -- join=True:
+         It is not unusual to have to construct the message string by
+         concatenating a collection of substrings, so in this case all
+         positional arguments are merged.
+      -- message:
+         If there is only one positional argument and no special keyword
+         arguments, the positional argument is saved as the message.
+      -- other:
+         In order to mimic the (apparent) behavior of StandardError, if
+         multiple positional arguments are supplied without any special keyword
+         arguments, then no message is stored.
+      """
+
+      # Save the arguments
+      self.args = args
+      self.kwargs = kwargs
+
+      # Check that no more than one mutually-exclusive keywords are given
+      exclusive_keywords = ["invalid", "join"]
+      sum_exclusive = sum(1 for kw in exclusive_keywords if kwargs[kw])
+      if sum_exclusive > 1:
+         msg = "".join(("DescriptorError does not accept more than one of [",
+               ", ".join(exclusive_keywords), "]."))
+         raise TypeError(msg)
+
+      # Construct the message
+      if kwargs.get("invalid", False):
+         self.message = 'Invalid {p}: "{v}".'.format(p=args[0], v=str(args[1]))
+      elif kwargs.get("join", False):
+         self.message = "".join(args)
+      elif len(args) == 1:
+         self.message = args[0]
+      else:
+         self.message = ""
+
+# End of DescriptorError class
+#==============================================================================
+#------------------------------------------------------------------------------
+
+
 
 #------------------------------------------------------------------------------
 #==============================================================================
@@ -133,13 +202,12 @@ class MaskDescriptor(object):
       v = dictionary["variable"]
       m = ModeDescriptor(dictionary.get("mode", "pseudocolor: full state"))
       if m.dimension == 1:
-         # TODO : What error goes here?
-         raise StandardError("cannot define mask based on profile")
+         raise DescriptorError("Masks cannot be defined based on a profile.")
       t = float(dictionary["threshold"])
       o = dictionary["operator"]
       if o not in ["<", "<=", ">", ">="]:
-         # TODO : Think about error to raise here
-         raise StandardError("something")
+         raise DescriptorError("operator for constructing a mask", o,
+               invalid=True)
 
       # Now that we've confirmed the options are valid, we store them
       self._variable = v
@@ -189,8 +257,8 @@ class MaskDescriptor(object):
       elif self._operator == ">=":
          mask = (var >= self._threshold)
       else:
-         # TODO : check that this is the right exception
-         raise InvalidParameterError("operator", self._operator)
+         raise DescriptorError("operator for applying a mask", self._operator,
+               invalid=True)
 
       return mask
 
@@ -226,11 +294,8 @@ class MovieDescriptor(object):
       make_movie (bool) : flag to generate the movie after making the frames
       final_pause (int) : the number of extra copies of the final frame
       masks (list of MaskDescriptors) : the masks to be applied (if any)
+      mask_method (string) : how to apply the masks
    """
-
-   # TODO : The MovieDescriptor should have a property defining how the mask
-   #        should be applied: force-high, force-low, or explicit (default to
-   #        explicit).
 
    #===========================================================================
    def __repr__(self):
@@ -256,6 +321,25 @@ class MovieDescriptor(object):
       Initialize the instance from a dictionary.
       """
 
+      # Use temporaries to store the values until all the processing is done.
+      # That way, if a bad value is supplied, no values will be changed and you
+      # won't end up with an awkward half-way blend of the old values and the
+      # new values (which may be inconsistent).
+
+      # Because the float built-in rejects None as an input, I use the
+      # oh-so-cleverly-named flote (don't judge me!) function that passes None
+      # through unchanged, but tries to cast anything else to a floating-point
+      # number.  That lets me use dict's get() method to supply None as a
+      # default value and make the code a bit shorter/cleaner.
+      def flote(x):
+         """
+         Same as float built-in, but allows None to pass unchanged.
+         """
+         if x is None:
+            return None
+         else:
+            return float(x)
+
       stub = dictionary["stub"]
       path = dictionary["path"]
       image_type = dictionary["image_type"]
@@ -263,65 +347,40 @@ class MovieDescriptor(object):
       mode = ModeDescriptor(dictionary.get("mode", "pseudocolor: full state"))
 
       window = MovieWindow()
-      try:
-         window.x.lo = float(dictionary["window_x_lo"])
-      except KeyError:
-         window.x.lo = None
-      try:
-         window.x.hi = float(dictionary["window_x_hi"])
-      except KeyError:
-         window.x.hi = None
-      try:
-         window.y.lo = float(dictionary["window_y_lo"])
-      except KeyError:
-         window.y.lo = None
-      try:
-         window.y.hi = float(dictionary["window_y_hi"])
-      except KeyError:
-         window.y.hi = None
-      try:
-         window.z.lo = float(dictionary["window_z_lo"])
-      except KeyError:
-         window.z.lo = None
-      try:
-         window.z.hi = float(dictionary["window_z_hi"])
-      except KeyError:
-         window.z.hi = None
+      window.x.lo = flote(dictionary.get("window_x_lo", None))
+      window.x.hi = flote(dictionary.get("window_x_hi", None))
+      window.y.lo = flote(dictionary.get("window_y_lo", None))
+      window.y.hi = flote(dictionary.get("window_y_hi", None))
+      window.z.lo = flote(dictionary.get("window_z_lo", None))
+      window.z.hi = flote(dictionary.get("window_z_hi", None))
 
       time_limits = MovieLimits()
-      try:
-         time_limits.lo = float(dictionary["time_lo"])
-      except KeyError:
-         time_limits.lo = None
-      try:
-         time_limits.hi = float(dictionary["time_hi"])
-      except KeyError:
-         time_limits.hi = None
+      time_limits.lo = flote(dictionary.get("time_lo", None))
+      time_limits.hi = flote(dictionary.get("time_hi", None))
 
       value_limits = MovieLimits()
-      try:
-         value_limits.lo = float(dictionary["value_lo"])
-      except KeyError:
-         value_limits.lo = None
-      try:
-         value_limits.hi = float(dictionary["value_hi"])
-      except KeyError:
-         value_limits.hi = None
+      value_limits.lo = flote(dictionary.get("value_lo", None))
+      value_limits.hi = flote(dictionary.get("value_hi", None))
 
+      # If we are merging the frames into a movie, the frame rate (fps) and
+      # movie type (movie_type) parameters are required.  However, if we are
+      # not actually making the movie, they are only read in for informational
+      # purposes, which means they are not required and can be None.
       make_movie = bool(dictionary.get("make_movie", True))
       if make_movie:
          fps = float(dictionary["fps"])
          movie_type = dictionary["movie_type"]
       else:
-         # If we are not actually making the movie (i.e., frames only), we are
-         # allowed to not specify parameters that only apply to making the
-         # final movie, thus None becomes an allowed value.  But we still try
-         # to get the actual values supplied just in case.
-         fps = dictionary.get("fps", None)
-         if fps is not None:
-            fps = float(fps)
+         fps = flote(dictionary.get("fps", None))
          movie_type = dictionary.get("movie_type", None)
 
+      # The final pause can be specified as <N>f or <F>s
+      # -- <N>f says to pause for <N> frames, where <N> is an integer (e.g. 12f
+      #    pauses for 12 frames)
+      # -- <F>s says to pause for <F> seconds, where <F> is a floating-point
+      #    number (e.g. 1.7s pauses for at least 1.7 seconds; if the frame rate
+      #    is 12 frames per second, then that gives 20.4 frames, and the number
+      #    is always raised to the next-higher integer, so 21 frames)
       pause = dictionary.get("final_pause", "0f")
       pause_length = pause[:-1]
       unit = pause[-1]
@@ -329,31 +388,23 @@ class MovieDescriptor(object):
          try:
             pause_length = int(pause_length)
          except:
-            # TODO : Is this the right error?
-            raise ValueError("Invalid spefication of final pause.")
+            raise DescriptorError("specification of final pause", pause.
+                  invalid=True)
       elif unit == "s":
          if fps is None:
-            # TODO : Is this the right error?
-            raise ValueError(
-                  "FPS not specified; cannot give final pause in seconds.")
+            raise DescriptorError("Cannot specify final pause in ",
+               "seconds without a frame rate.", join=True)
          try:
             pause_length = int(math.ceil(float(pause_length) * fps))
          except:
-            # TODO : Is this the right error?
-            raise ValueError("Invalid spefication of final pause.")
+            raise DescriptorError("specification of final pause", pause,
+                  invalid=True)
       else:
-         # TODO : Is this the right error?
-         raise ValueError("Invalid spefication of final pause.")
+         raise DescriptorError("specification of final pause", pause,
+               invalid=True)
       final_pause = pause_length
 
-      # TODO : How to handle masks in different dimensions?  For example, what
-      #        if I want to plot a 2D pseudocolor image of the density, but I
-      #        list a mask that says the perturbation profile must be greater
-      #        than 0.  Can I handle this calculation when I apply the masks?
-      #        Or must I forbid masks of different dimensionality?  The first
-      #        case (deal with it) should be handled where the masks are
-      #        applied.  The second case (forbit it) should be handled here.
-
+      # Add all the masks; skip any that are missing, but warn the user.
       mask_names = dictionary.get("masks", [])
       masks = []
       for name in mask_names:
@@ -363,6 +414,19 @@ class MovieDescriptor(object):
             msg = "".join(('Mask "', name,
                '" is undefined and will be skipped.'))
             warnings.warn(msg, UserWarning)
+
+      # Value values for the mask method are "explicit" (explicitly masks
+      # values using NumPy's masked arrays), "force-lo" (force the masked cells
+      # to be equal to the lowest non-masked value in the array), "force-hi"
+      # (force the masked cells to be equal to the highest non-masked value in
+      # the array), or a floating-point number (force the masked cells to be
+      # equal to the specified value).
+      mask_method = dictionary.get("mask_method", "explicit")
+      if mask_method not in ["explicit", "force-lo", "force-hi"]:
+         try:
+            mask_method = float(mask_method)
+         except ValueError:
+            raise DescriptorError("mask method", mask_method, invalid=True)
 
       # Now that all the values have been verified, save them
       self.stub = stub
@@ -378,6 +442,7 @@ class MovieDescriptor(object):
       self.movie_type = movie_type
       self.final_pause = final_pause
       self.masks = masks
+      self.mask_method = mask_method
 
    #===========================================================================
    def within_time_limits(self, time):
@@ -457,12 +522,22 @@ class MovieDescriptor(object):
       z = z[idx]
       z = z.reshape((1,1,len(z)))
 
-      # Apply the masks
+      # Construct the overall mask (union of all masks)
       cumulative_mask = np.zeros_like(var, dtype=bool)
       for mask in self.masks:
          cumulative_mask = np.logical_or(cumulative_mask, mask.apply(state))
 
-      var = np.ma.masked_where(cumulative_mask, var)
+      # Apply the mask
+      if self.mask_method == "explicit":
+         var = np.ma.masked_where(cumulative_mask, var)
+      elif self.mask_method == "force-lo":
+         maskval = np.amin(var[np.logical_not(cumulative_mask)])
+         var[cumulative_mask] = maskval
+      elif self.mask_method == "force-hi":
+         maskval = np.amax(var[np.logical_not(cumulative_mask)])
+         var[cumulative_mask] = maskval
+      else:
+         var[cumulative_mask] = self.mask_method
 
       # Compute value limits
       bounds_type = state.known_variables[self.variable].zero
@@ -479,7 +554,7 @@ class MovieDescriptor(object):
          vhi += pad
          vlo -= pad
       else:
-         pass  # TODO
+         raise DescriptorError("bounds type", bounds_type, invalid=True)
       if self.value_limits.lo is not None:
          vlo = self.value_limits.lo
       if self.value_limits.hi is not None:
@@ -541,7 +616,8 @@ class ModeDescriptor(object):
       elif len(args) == 4:
          self.__init_from_properties(*args)
       else:
-         raise InvalidParameterError("nargs", len(args))
+         msg = "__init__ takes 0, 1, or 4 positions arguments ({n} given}"
+         raise TypeError(msg.format(n=len(args)))
 
    #===========================================================================
    def __init_default(self):
@@ -581,8 +657,7 @@ class ModeDescriptor(object):
                self.transform = detail
                self.reference = "base"
             else:
-               # TODO : Check the error used here
-               raise InvalidParameterError("mode", mode)
+               raise DescriptorError("profile", detail, invalid=True)
          elif dim == "pseudocolor":
             self.dimension = 2
             d1, junk, d2 = detail.rpartition(" ")
@@ -596,8 +671,7 @@ class ModeDescriptor(object):
                elif "contrast" in detail:
                   self.transform = "contrast"
                else:
-                  # TODO : Check the error used here
-                  raise InvalidParameterError("mode", mode)
+                  raise DescriptorError("pseudocolor", detail, invalid=True)
                a, f = detail.split(self.transform)
                a = a.strip()
                f = f.strip()
@@ -606,15 +680,13 @@ class ModeDescriptor(object):
                elif a == "absolute":
                   self.absolute = True
                else:
-                  # TODO : Check the error used here
-                  raise InvalidParameterError("mode", mode)
+                  raise DescriptorError("modifier", a, invalid=True)
                if f == "" or f == "from base":
                   self.reference = "base"
                elif f == "from mean":
                   self.reference = "mean"
                else:
-                  # TODO : Check the error used here
-                  raise InvalidParameterError("mode", mode)
+                  raise DescriptorError("reference state", f, invalid=True)
 
    #===========================================================================
    def __init_from_properties(self, d, a, t, r):
@@ -622,12 +694,12 @@ class ModeDescriptor(object):
       Initialize from mode properties.
       """
 
-      # TODO : This was originally written for compactness.  I need to rewrite
-      #        it to give clear error messages.
+      if a and d == 1:
+         raise DescriptorError("Cannot apply absolute value to a profile.")
 
-      if a and (d == 1 or t not in ["perturbation", "contrast"]):
-         # TODO : Check the error used here
-         raise InvalidParameterError("absolute", a)
+      if a and t not in ["perturbation", "contrast"]:
+         msg = "Can only apply absolute value to a perturbation or contrast."
+         raise DescriptorError(msg)
 
       if d == 1:
          allowed = {"full" : ["none"],
@@ -637,8 +709,7 @@ class ModeDescriptor(object):
                     "base" : ["none", "perturbation", "contrast"],
                     "mean" : ["none", "perturbation", "contrast"]}
       else:
-         # TODO : Check the error used here
-         raise InvalidParameterError("dimension", d)
+         raise DescriptorError("dimension", d, invalid=True)
 
       if t in allowed.get(r, []):
          self.dimension = d
@@ -646,8 +717,8 @@ class ModeDescriptor(object):
          self.transform = t
          self.reference = r
       else:
-         # TODO : Check the error used here
-         raise InvalidParameterError("transform", t)
+         raise DescriptorError("reference state/transformation pair",
+               "{r}, {t}".format(r=r, t=t), invalid=True)
 
    #===========================================================================
    def __repr__(self):
@@ -655,32 +726,27 @@ class ModeDescriptor(object):
       Supply a detailed representation of the mode.
       """
 
-      # TODO : This was originally written for compactness.  I need to rewrite
-      #        it to give clear error messages.
-
       if self.dimension == 1:
          if self.absolute:
-            # TODO : Check the error used here
-            raise InvalidParameterError("absolute", self.absolute)
+            raise DescriptorError("Cannot apply absolute value to a profile.")
          if self.reference == "full" and self.transform == "none":
             return "profile: full state"
+         elif (self.reference == "base" and
+               self.transform in ["perturbation", "contrast"]):
+            return "profile: " + self.transform
          else:
-            if (self.reference == "base" and
-                  self.transform in ["perturbation", "contrast"]):
-               return "profile: " + self.transform
-            else:
-               # TODO : Check the error used here
-               raise InvalidParameterError("transform", self.transform)
+            raise DescriptorError("reference state/transformation pair",
+                  "{r}, {t}".format(r=r, t=t), invalid=True)
       elif self.dimension == 2:
          if self.transform == "none":
             if self.absolute:
-               # TODO : Check the error used here
-               raise InvalidParameterError("absolute", self.absolute)
+               raise DescriptorError("Can only apply absolute value to a ",
+                     "perturbation or contrast.", join=True)
             if self.reference in ["full", "base", "mean"]:
                return "pseudocolor: " + self.reference + " state"
             else:
-               # TODO : Check the error used here
-               raise InvalidParameterError("reference", self.reference)
+               raise DescriptorError("reference state", self.reference,
+                     invalid=True)
          elif self.transform in ["perturbation", "contrast"]:
             if self.reference in ["base", "mean"]:
                if self.absolute:
@@ -690,14 +756,13 @@ class ModeDescriptor(object):
                detail_list.extend([self.transform, "from", self.reference])
                return "pseudocolor: " + " ".join(detail_list)
             else:
-               # TODO : Check the error used here
-               raise InvalidParameterError("reference", self.reference)
+               raise DescriptorError("reference state", self.reference,
+                     invalid=True)
          else:
-            # TODO : Check the error used here
-            raise InvalidParameterError("transform", self.transform)
+            raise DescriptorError("transformation", self.transform,
+                  invalid=True)
       else:
-         # TODO : Check the error used here
-         raise InvalidParameterError("dimension", self.dimension)
+         raise DescriptorError("dimension", d, invalid=True)
 
    #===========================================================================
    def extract(self, variable, state):
@@ -716,8 +781,8 @@ class ModeDescriptor(object):
 
       if self.transform == "none":
          if self.absolute:
-            # TODO : What error to raise here?
-            raise StandardError("bad absolute")
+            raise DescriptorError("Can only apply absolute value to a ",
+                  "perturbation or contrast.", join=True)
          if self.reference == "full":
             var = state.extract(variable)
          elif self.reference == "base":
@@ -729,8 +794,8 @@ class ModeDescriptor(object):
             var = var.reshape([shape[0], 1, 1])
             var = var.repeat(shape[1], axis=1).repeat(shape[2], axis=2)
          else:
-            # TODO : What error to raise here?
-            raise StandardError("bad reference")
+            raise DescriptorError("reference state", self.reference,
+                  invalid=True)
       elif self.transform in ["perturbation", "contrast"]:
          full = state.extract(variable)
          if self.reference == "base":
@@ -742,16 +807,15 @@ class ModeDescriptor(object):
             ref = ref.reshape([shape[0], 1, 1])
             ref = ref.repeat(shape[1], axis=1).repeat(shape[2], axis=2)
          else:
-            # TODO : What error to raise here?
-            raise StandardError("bad reference")
+            raise DescriptorError("reference state", self.reference,
+                  invalid=True)
          var = full - ref
          if self.transform == "contrast":
             var = var / ref
          if self.absolute:
             var = np.abs(var)
       else:
-         # TODO : What error to raise here?
-         raise StandardError("bad transform")
+         raise DescriptorError("transformation", self.transform, invalid=True)
 
       return var
 

@@ -14,7 +14,11 @@ of this sort to set up what's necessary to run the movie maker.
 
 #==============================================================================
 #------------------------------------------------------------------------------
-# Because v05 of DumPy is not normally in the path on this system
+# Version 5 of DumPy is not normally in the path on this system, so it needs to
+# be explicitly added.  Because this is a for development as part of a local
+# test, DumPy_v05 is not set up site-wide, so using the site package and a PTH
+# file is not the best plan.  Thus I just use sys.path to add the location of
+# the test version of DumPy_v05.
 # TODO : take this out to test on other systems
 import sys
 sys.path.append("/Users/bkrueger/research/CCSNe/heating_layer/results/sample/dumses/visu")

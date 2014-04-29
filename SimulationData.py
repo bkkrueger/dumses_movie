@@ -24,7 +24,19 @@ Attributes:
 import numpy as np
 
 from dumpy_v05.data.rd_dumses import DumsesData
-import MyExceptions as me
+
+#------------------------------------------------------------------------------
+#==============================================================================
+class SimulationError(StandardError):
+   """
+   Signals that a simulation data object encountered an error.
+   """
+
+# End class SimulationError
+#==============================================================================
+#------------------------------------------------------------------------------
+
+
 
 #------------------------------------------------------------------------------
 #==============================================================================
@@ -98,8 +110,8 @@ class SimulationInput(object):
       elif len(args) == 1:
          self.construct(*args)
       else:
-         # TODO : Think about the appropriate error to raise here
-         raise me.InvalidParameterError("nargs", len(args))
+         msg = "__init__ takes at most 1 positional argument ({n} given)"
+         raise TypeError(msg.format(n=len(args)))
 
    #===========================================================================
    def clear(self):
@@ -133,12 +145,9 @@ class SimulationInput(object):
          inputs_file_name (string) : the name of the inputs file to parse
       """
 
-      # TODO : Check all values are valid before saving (so you don't get a
-      #        mixed state halfway between the new and old values).
-
       # Data to extract from the parameters file, using defaults as appropriate
       # to match DUMSES code
-      # NOTE : By default all values should be cast to strings.  This is
+      # note : By default all values should be cast to strings.  This is
       #        because the input is read from a Fortran name list file, and
       #        Fortran allows scientific notation with a "d" instead of an "e"
       #        to specify double-precision, so I run a replace on all values,
@@ -178,30 +187,42 @@ class SimulationInput(object):
                inputs_dict[key] = temp[1:-1].strip()
             else:
                inputs_dict[key] = temp
-               
          else:
             # Default case: conversion to float (with accounting for Fortran's
             # scientific notation for double-precision constants)
             inputs_dict[key] = float(inputs_dict[key].replace("d","e"))
 
       # Construct desired quantities
-      cs = inputs_dict["csnd_up"] # I'm sick of typing 'inputs_dict["csnd_up"]'
+      gamma = inputs_dict["gamma"]
 
-      self.gamma = inputs_dict["gamma"]
+      csnd_up = inputs_dict["csnd_up"]
+      mach_up = inputs_dict["mach_up"]
+      dens_up = inputs_dict["dens_up"]
+      pres_up = dens_up * csnd_up**2 / gamma
 
-      self._csnd_up = cs
-      self._mach_up = inputs_dict["mach_up"]
-      self.dens_up = inputs_dict["dens_up"]
-      self.pres_up = self.dens_up * cs**2 / self.gamma
+      layer_width = inputs_dict["layer_limit"]
+      shape = inputs_dict["layer_shape"]
 
-      self.layer_width = inputs_dict["layer_limit"]
-      self._shape = inputs_dict["layer_shape"]
+      Kheat = inputs_dict["Kheat"]
+      heat_coef = Kheat * (mach_up * csnd_up**3) / (layer_width * gamma)
+      Kgrav = inputs_dict["Kgrav"]
+      grav_coef = - Kgrav *  csnd_up**2 / layer_width
 
-      self._Kheat = inputs_dict["Kheat"]
-      self._heat_coef = self._Kheat * \
-            (self._mach_up * cs**3) / (self.layer_width * self.gamma)
-      self._Kgrav = inputs_dict["Kgrav"]
-      self._grav_coef = - self._Kgrav *  cs**2 / self.layer_width
+      # Save values now that all computations and checks are complete
+      self.gamma = gamma
+
+      self._csnd_up = csnd_up
+      self._mach_up = mach_up
+      self.dens_up = dens_up
+      self.pres_up = pres_up
+
+      self.layer_width = layer_width
+      self._shape = shape
+
+      self._Kheat = Kheat
+      self._heat_coef = heat_coef
+      self._Kgrav = Kgrav
+      self._grav_coef = grav_coef
 
       self.__initialized = True
 
@@ -217,7 +238,9 @@ class SimulationInput(object):
       """
 
       if not self.__initialized:
-         raise me.UninitializedObjectError()
+         msg = " ".join(("Cannot compute shape function on an uninitialized",
+            "SimulationInput object."))
+         raise SimulationError(msg)
 
       XX = np.abs(x / self.layer_width)
 
@@ -245,7 +268,9 @@ class SimulationInput(object):
       """
 
       if not self.__initialized:
-         raise me.UninitializedObjectError()
+         msg = " ".join(("Cannot compute gravity function on an uninitialized",
+            "SimulationInput object."))
+         raise SimulationError(msg)
 
       grav = np.zeros((x.shape[0], y.shape[1], z.shape[2], 3))
       grav[...,0] = self._grav_coef * self._shape_function(x,y,z)
@@ -265,7 +290,9 @@ class SimulationInput(object):
       """
 
       if not self.__initialized:
-         raise me.UninitializedObjectError()
+         msg = " ".join(("Cannot compute heating function on an uninitialized",
+            "SimulationInput object."))
+         raise SimulationError(msg)
 
       return (self._heat_coef * density * self._shape_function(x, y, z))
 
@@ -399,8 +426,8 @@ class SimulationState(object):
       elif len(args) == 2:
          self.construct(*args)
       else:
-         # TODO : What is the appropriate error here?
-         raise me.InvalidParameterError("nargs", len(args))
+         msg = "__init__ takes either 0 or 2 positional arguments ({n} given)"
+         raise TypeError(msg.format(n=len(args)))
 
       # Generate the collection of known variables with appropriate function
       # bindings.  Some variables will have multiple aliases, so they will be
@@ -584,35 +611,50 @@ class SimulationState(object):
          input_parameters (SimulationInputs) : parameters from inputs file
       """
 
-      # TODO : Check all values are valid before saving (so you don't get a
-      #        mixed state halfway between the new and old values).
+      # Extract and check values
+      params = input_parameters
 
-      self.params = input_parameters
+      t = dumpy.time
 
-      self.t = dumpy.time
+      x = dumpy.x.reshape((len(dumpy.x),1,1))
+      y = dumpy.y.reshape((1,len(dumpy.y),1))
+      z = dumpy.z.reshape((1,1,len(dumpy.z)))
 
-      self.x = dumpy.x.reshape((len(dumpy.x),1,1))
-      self.y = dumpy.y.reshape((1,len(dumpy.y),1))
-      self.z = dumpy.z.reshape((1,1,len(dumpy.z)))
-
-      self._dens = dumpy.rho
-      self._momv = dumpy.rhou
-      self._Ener = dumpy.E
+      dens = dumpy.rho
+      momv = dumpy.rhou
+      Ener = dumpy.E
 
       temp = dumpy.rho0.reshape((len(dumpy.x),1,1))
       temp = temp.repeat(len(dumpy.y), axis=1)
       temp = temp.repeat(len(dumpy.z), axis=2)
-      self._dens0 = temp
+      dens0 = temp
 
       temp = dumpy.rhou0.reshape((len(dumpy.x),1,1))
       temp = temp.repeat(len(dumpy.y), axis=1)
       temp = temp.repeat(len(dumpy.z), axis=2)
-      self._momv0 = temp
+      momv0 = temp
 
       temp = dumpy.E0.reshape((len(dumpy.x),1,1))
       temp = temp.repeat(len(dumpy.y), axis=1)
       temp = temp.repeat(len(dumpy.z), axis=2)
-      self._Ener0 = temp
+      Ener0 = temp
+
+      # Save values
+      self.params = params
+
+      self.t = t
+
+      self.x = x
+      self.y = y
+      self.z = z
+
+      self._dens = dens
+      self._momv = momv
+      self._Ener = Ener
+
+      self._dens0 = dens0
+      self._momv0 = momv0
+      self._Ener0 = Ener0
 
       self.__initialized = True
 
@@ -627,14 +669,16 @@ class SimulationState(object):
       """
 
       if not self.__initialized:
-         raise UninitializedObjectError()
+         msg = " ".join(("Cannot extract data from an uninitialized",
+            "SimulationState object."))
+         raise SimulationError(msg)
 
       # Get the appropriate variable function
       try:
          func = self.known_variables[variable_name].compute
-      except KeyError, ke:
-         # TODO : Is this the appropriate error?
-         raise InvalidVariableError(str(ke))
+      except KeyError:
+         msg = 'Unrecognized variable: "{v}"'.format(v=variable_name)
+         raise SimulationError(msg)
 
       var = func(full_state)
 
