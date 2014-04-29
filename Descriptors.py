@@ -77,7 +77,8 @@ class DescriptorError(StandardError):
 
       # Check that no more than one mutually-exclusive keywords are given
       exclusive_keywords = ["invalid", "join"]
-      sum_exclusive = sum(1 for kw in exclusive_keywords if kwargs[kw])
+      sum_exclusive = sum(1 for kw in exclusive_keywords
+            if kwargs.get(kw, False))
       if sum_exclusive > 1:
          msg = "".join(("DescriptorError does not accept more than one of [",
                ", ".join(exclusive_keywords), "]."))
@@ -120,7 +121,7 @@ class MovieLimits(object):
       """
       return "Limits: [" + str(self.lo) + "," + str(self.hi) + "]"
 
-   __str__ == __repr__
+   __str__ = __repr__
 
 # End of MovieLimits class
 #==============================================================================
@@ -184,7 +185,7 @@ class MaskDescriptor(object):
       Construct the class from a dictionary.
       """
 
-      self.construct(*args)
+      self.construct(dictionary)
 
    #===========================================================================
    def construct(self, dictionary):
@@ -221,8 +222,8 @@ class MaskDescriptor(object):
       Defines the string representation of the instance.
       """
 
-      return 'MaskDescriptor: "' + ' '.join((self._variable, self._mode,
-         self._operator, str(self._threshold))) + '"'
+      return "".join(('MaskDescriptor: "', self._variable, " (", self._mode,
+         ") ", self._operator, " ", str(self._threshold), '"'))
 
    #===========================================================================
    def __str__(self):
@@ -230,8 +231,8 @@ class MaskDescriptor(object):
       Defines the string representation of the instance.
       """
 
-      return ' '.join((self._variable, self._mode, self._operator,
-         str(self._threshold)))
+      return ''.join((self._variable, " (", str(self._mode), ") ",
+         self._operator, " ", str(self._threshold)))
 
    #===========================================================================
    def apply(self, state):
@@ -303,9 +304,16 @@ class MovieDescriptor(object):
       String representation.
       """
 
-      return " ".join(("Movie of the", self.variable, self.mode))
+      return "".join(('MovieDescriptor: "', self.variable, " (",
+         str(self.mode), ')"'))
 
-   __str__ == __repr__
+   #===========================================================================
+   def __str__(self):
+      """
+      String representation.
+      """
+
+      return "".join((self.variable, " (", str(self.mode), ')'))
 
    #===========================================================================
    def __init__(self, dictionary, mask_list):
@@ -388,7 +396,7 @@ class MovieDescriptor(object):
          try:
             pause_length = int(pause_length)
          except:
-            raise DescriptorError("specification of final pause", pause.
+            raise DescriptorError("specification of final pause", pause,
                   invalid=True)
       elif unit == "s":
          if fps is None:
@@ -643,7 +651,7 @@ class ModeDescriptor(object):
          # Normalize spacing
          mode = ' '.join(string.split())
 
-         dim, detail = mode.split(":")
+         dim, junk, detail = mode.partition(":")
          dim = dim.strip()
          detail = detail.strip()
 
@@ -687,6 +695,8 @@ class ModeDescriptor(object):
                   self.reference = "mean"
                else:
                   raise DescriptorError("reference state", f, invalid=True)
+         else:
+            raise DescriptorError("dimension", dim, invalid=True)
 
    #===========================================================================
    def __init_from_properties(self, d, a, t, r):

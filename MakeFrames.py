@@ -82,7 +82,7 @@ def make_all_frames(data_list, movie_list):
    for movie in movie_list.values():
 
       # Do any of the surviving movies need the initial state?
-      if movie.dimension == 1:
+      if movie.mode.dimension == 1:
          profile_mode = True
          break
 
@@ -171,7 +171,7 @@ def make_all_frames(data_list, movie_list):
                make_single_frame(state, movie, path, number, state0)
             except (Desc.DescriptorError, SD.SimulationError) as err:
                msg = "".join(("While generating movie ", str(movie),
-                  " with data file " output_name,
+                  " with data file ", output_name,
                   ", the following error occurred:\n   ", str(err),
                   "\nThis frame will not be drawn."))
                warnings.warn(msg, UserWarning)
@@ -286,7 +286,7 @@ def panel_2D_pseudocolor(state, movie, axes):
    cbar = plt.colorbar(image, cax=cbar_axes)
 
    # Construct the title
-   axes.set_title(" ".join((movie.variable, movie.mode)))
+   axes.set_title(" ".join((movie.variable, str(movie.mode))))
 
    # Compute ticks (x, y, color)
    ntickx = 6

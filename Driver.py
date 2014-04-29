@@ -91,22 +91,29 @@ if __name__ == "__main__":
 
    # Construct the descriptors
    masks = {}
-   for m in descriptions["masks"]:
-      masks[m] = Desc.MaskDescriptor(descriptions["masks"][m])
+   for name, mask_string in descriptions["masks"].items():
+      masks[name] = Desc.MaskDescriptor(mask_string)
 
    movies = {}
-   for m in descriptions["movies"]:
-      if args.movie_list is None:
-         movies[m] = Desc.MovieDescriptor(descriptions["movies"][m], masks)
-      else:
-         if m in args.movie_list:
-            movies[m] = Desc.MovieDescriptor(descriptions["movies"][m], masks)
+   for name, movie_string in descriptions["movies"].items():
+      if args.movie_list is None or name in args.movie_list:
+         movies[name] = Desc.MovieDescriptor(movie_string, masks)
    if args.movie_list is not None:
       for m in args.movie_list:
          if m not in movies:
             msg = '"'.join(('Movie ', m, ' not found in file ',
                args.mfile, '.'))
             warnings.warn(msg, UserWarning)
+
+   # Repeat input
+   print "="*79
+   print "found {n} masks:".format(n=len(masks))
+   for name, mask in masks.items():
+      print "   {0}:".format(name), mask
+   print "found {n} movies:".format(n=len(movies))
+   for name, movie in movies.items():
+      print "   {0}:".format(name), movie
+   print "="*79
 
    # Call the primary loop
    make_all_frames(output_list, movies)

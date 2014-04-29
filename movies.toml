@@ -2,7 +2,7 @@
    stub = 'vort_'
    path = 'movies/test/'
    variable = 'specific z vorticity'
-   mode = 'full state'
+   mode = 'pseudocolor: full state'
    window_x_lo = -3.0
    window_x_hi =  3.0
    make_movie = false
@@ -15,7 +15,7 @@
    stub = 'entr_'
    path = 'movies/test'
    variable = 'specific entropy'
-   mode = 'perturbation'
+   mode = 'pseudocolor: perturbation'
    make_movie = false
    final_pause = '0f'
    fps = 12
@@ -25,7 +25,7 @@
 
 [masks.buoyant]
    variable = 'specific entropy'
-   mode = 'perturbation'
+   mode = 'pseudocolor: perturbation'
    operator = '<='
    threshold = 0
 
@@ -38,7 +38,7 @@
    stub = "prof1_"
    path = "movies/test"
    variable = "specific entropy"
-   mode = "profile"
+   mode = "profile: full state"
    image_type = "png"
    movie_type = "avi"
    fps = 20
@@ -48,7 +48,7 @@
    stub = "prof2_"
    path = "movies/test"
    variable = "density"
-   mode = "profile"
+   mode = "profile: full state"
    image_type = "png"
    movie_type = "avi"
    fps = 20
@@ -58,7 +58,7 @@
    stub = "prof3_"
    path = "movies/test"
    variable = "specific z vorticity"
-   mode = "profile"
+   mode = "profile: full state"
    image_type = "png"
    movie_type = "avi"
    fps = 20
