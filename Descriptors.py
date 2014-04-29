@@ -14,9 +14,9 @@ The ModeDescriptor object describes the details of how to process a variable
 for a movie.  It allows specification of profiles or 2D pseudocolor plots, with
 a selection of transformations that may be applied.
 
-The MovieWindow class describes a viewing window (limits in the coordinates)
-for plotting.  It uses a MovieLimits object for each coordinate direction.
-These two essentially exist for packaging more than functionality.
+The MovieLimits object describes the lower and upper limits on some quantity.
+The MovieWindow class packages three of these together to describe limits in 3D
+coordinates.  These two are essentially for packaging more than functionality.
 
 The DescriptorError class describes an error raised by one of the Descriptors.
 The errors raised by them tend to be related to illegal values (or illegal
@@ -26,12 +26,12 @@ Descriptors separately from other errors (e.g. a ValueError in something used
 by one of the Descriptors, etc).
 
 Attributes:
-   MovieDescriptor (class) : a description of the movie to be made
-   MaskDescriptor (class) : a description of a mask to be applied
-   ModeDescriptor (class) : a description of a plotting mode
+   DescriptorError (class) : exception for Descriptors
    MovieLimits (class) : low/high limits of some quantity
    MovieWindow (class) : low/high limits in 3 dimensions for a viewing space
-   DescriptorError (class) : exception for Descriptors
+   MaskDescriptor (class) : description of a mask to be applied to the data
+   MovieDescriptor (class) : description of a movie to be made
+   ModeDescriptor (class) : description of the plotting mode of a variable
 """
 
 import math
@@ -57,11 +57,12 @@ class DescriptorError(StandardError):
       -- invalid=True:
          A very common message: 'Invalid <parameter>: "<value>".', where
          <parameter> and <value> are given as the first and second positional
-         arguments respectively.
+         arguments respectively.  The name of the parameter should be a string,
+         while the value may be any quantity that can be cast into a string.
       -- join=True:
-         It is not unusual to have to construct the message string by
-         concatenating a collection of substrings, so in this case all
-         positional arguments are merged.
+         Sometimes the message is the concatenation of a collection of
+         substrings.  In this case all positional arguments are cast to strings
+         and concatenated in order.
       -- message:
          If there is only one positional argument and no special keyword
          arguments, the positional argument is saved as the message.
@@ -76,19 +77,18 @@ class DescriptorError(StandardError):
       self.kwargs = kwargs
 
       # Check that no more than one mutually-exclusive keywords are given
-      exclusive_keywords = ["invalid", "join"]
-      sum_exclusive = sum(1 for kw in exclusive_keywords
-            if kwargs.get(kw, False))
+      exclusive = ["invalid", "join"]
+      sum_exclusive = sum(1 for kw in exclusive if kwargs.get(kw, False))
       if sum_exclusive > 1:
          msg = "".join(("DescriptorError does not accept more than one of [",
-               ", ".join(exclusive_keywords), "]."))
+               ", ".join(exclusive), "]."))
          raise TypeError(msg)
 
       # Construct the message
       if kwargs.get("invalid", False):
          self.message = 'Invalid {p}: "{v}".'.format(p=args[0], v=str(args[1]))
       elif kwargs.get("join", False):
-         self.message = "".join(args)
+         self.message = "".join(str(a) for a in args)
       elif len(args) == 1:
          self.message = args[0]
       else:
@@ -121,7 +121,11 @@ class MovieLimits(object):
       """
       return "Limits: [" + str(self.lo) + "," + str(self.hi) + "]"
 
-   __str__ = __repr__
+   def __str__(self):
+      """
+      String representation.
+      """
+      return "[" + str(self.lo) + "," + str(self.hi) + "]"
 
 # End of MovieLimits class
 #==============================================================================
@@ -151,6 +155,12 @@ class MovieWindow(object):
       """
       return "   \n".join(("Movie window:",
          repr(self.x), repr(self.y), repr(self.z)))
+
+   def __str__(self):
+      """
+      String representation.
+      """
+      return " ".join((str(self.x), str(self.y), str(self.z)))
 
 # End of MovieWindow class
 #==============================================================================
@@ -197,14 +207,23 @@ class MaskDescriptor(object):
 
       Arguments:
          dictionary (dict) : a dictionary with the needed information
+
+      Returns:
+         None
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
       # Get the values and do conversions before changing the internal storage
       v = dictionary["variable"]
+
       m = ModeDescriptor(dictionary.get("mode", "pseudocolor: full state"))
       if m.dimension == 1:
          raise DescriptorError("Masks cannot be defined based on a profile.")
+
       t = float(dictionary["threshold"])
+
       o = dictionary["operator"]
       if o not in ["<", "<=", ">", ">="]:
          raise DescriptorError("operator for constructing a mask", o,
@@ -245,6 +264,12 @@ class MaskDescriptor(object):
 
       Arguments:
          state (SimulationState) : the current state of the simulation
+
+      Returns:
+         an array specifying the mask
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
       var = self._mode.extract(self._variable, state)
@@ -283,14 +308,14 @@ class MovieDescriptor(object):
 
    Attributes:
       stub (string) : the stub of the output files (images and movie)
-      path (string) : the path to where the files will be saved
+      path (string) : the path to where the movie will be saved
       image_type (string) : the extension for the image files
       variable (string) : the variable to be plotted
       mode (ModeDescriptor) : the mode for computing the variable
       window (MovieWindow) : the section of the data to be plotted
       time_limits (MovieLimits) : the time range to be plotted
       value_limits (MovieLimits) : the limits on the colorbar
-      fps (float) : the frames per second of the movie
+      fps (float) : the frame rate for the movie in frames per second
       movie_type (string) : the extension for the movie file
       make_movie (bool) : flag to generate the movie after making the frames
       final_pause (int) : the number of extra copies of the final frame
@@ -327,6 +352,16 @@ class MovieDescriptor(object):
    def construct(self, dictionary, mask_list):
       """
       Initialize the instance from a dictionary.
+
+      Arguments:
+         dictionary (dict) : a dictionary describing the parameters
+         mask_list (list of MaskDescriptors) : the available masks
+
+      Returns:
+         an array specifying the mask
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
       # Use temporaries to store the values until all the processing is done.
@@ -394,8 +429,8 @@ class MovieDescriptor(object):
       unit = pause[-1]
       if unit == "f":
          try:
-            pause_length = int(pause_length)
-         except:
+            final_pause = int(pause_length)
+         except ValueError:
             raise DescriptorError("specification of final pause", pause,
                   invalid=True)
       elif unit == "s":
@@ -403,14 +438,13 @@ class MovieDescriptor(object):
             raise DescriptorError("Cannot specify final pause in ",
                "seconds without a frame rate.", join=True)
          try:
-            pause_length = int(math.ceil(float(pause_length) * fps))
-         except:
+            final_pause = int(math.ceil(float(pause_length) * fps))
+         except ValueError:
             raise DescriptorError("specification of final pause", pause,
                   invalid=True)
       else:
          raise DescriptorError("specification of final pause", pause,
                invalid=True)
-      final_pause = pause_length
 
       # Add all the masks; skip any that are missing, but warn the user.
       mask_names = dictionary.get("masks", [])
@@ -423,12 +457,12 @@ class MovieDescriptor(object):
                '" is undefined and will be skipped.'))
             warnings.warn(msg, UserWarning)
 
-      # Value values for the mask method are "explicit" (explicitly masks
+      # Valid values for the mask method are "explicit" (explicitly masks
       # values using NumPy's masked arrays), "force low" (force the masked
-      # cells to be equal to the lowest non-masked value in the array), "force
-      # high" (force the masked cells to be equal to the highest non-masked
-      # value in the array), or a floating-point number (force the masked cells
-      # to be equal to the specified value).
+      # cells to be equal to the lowest non-masked value), "force high" (force
+      # the masked cells to be equal to the highest non-masked value in the
+      # array), or a floating-point number (force the masked cells to be equal
+      # to the specified value).
       mask_method = dictionary.get("mask_method", "explicit")
       if mask_method not in ["explicit", "force low", "force high"]:
          try:
@@ -489,14 +523,19 @@ class MovieDescriptor(object):
          state (SimulationState) : the current state of the simulation
          pad_bounds (float) : extra padding around value bounds
 
-      Returns (in order):
+      Returns:
          variable (numpy.ndarray) : the masked data array
          x (numpy.ndarray) : the x-coordinates
          y (numpy.ndarray) : the y-coordinates
          z (numpy.ndarray) : the z-coordinates
+         vlo (float) : the lowest value for the plot range
+         vhi (float) : the highest value for the plot range
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
-      # Get the variable
+      # Get the data for the desired variable
       var = self.mode.extract(self.variable, state)
 
       # Apply the limits from the MovieWindow
@@ -608,9 +647,9 @@ class ModeDescriptor(object):
       implement 3D visualizations.  When the dimension is 1, only 3 modes are
       allowed: full state, or the perturbation or contrast relative to the base
       state.
-   -- The transform may be "none" (the full state), "perturbation" (subtract
-      the reference state), or "contrast" (subtract and divide by the reference
-      state).
+   -- The transform may be "none" (the reference state), "perturbation"
+      (subtract the reference state from the full state), or "contrast"
+      (subtract and divide by the reference state).
    -- The reference state may be "full" (only allowed in conjunction with the
       "none" transformation to specify that the full state should be plotted),
       "base" (the steady base state for the unperturbed initial conditions), or
@@ -628,7 +667,7 @@ class ModeDescriptor(object):
    #===========================================================================
    def __init__(self, *args, **kwargs):
       """
-      Select the appropriate initialization method.
+      Initialize the descriptor.
       """
 
       if len(args) == 0:
@@ -657,6 +696,15 @@ class ModeDescriptor(object):
       Initialize from a descriptive string.
 
       The string may be None, in which case the default occurs.
+
+      Arguments:
+         string (string) : string describing the mode, or can be None
+
+      Returns:
+         None
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
       if string is None:
@@ -665,11 +713,14 @@ class ModeDescriptor(object):
          # Normalize spacing
          mode = ' '.join(string.split())
 
+         # Split at the colon to divide the dimension notation from the rest of
+         # the details.
          dim, junk, detail = mode.partition(":")
          dim = dim.strip()
          detail = detail.strip()
 
          if dim == "profile":
+            # 1D profiles
             self.dimension = 1
             self.absolute = False
             if detail == "full state":
@@ -681,6 +732,7 @@ class ModeDescriptor(object):
             else:
                raise DescriptorError("profile", detail, invalid=True)
          elif dim == "pseudocolor":
+            # 2D pseudocolor plots
             self.dimension = 2
             d1, junk, d2 = detail.rpartition(" ")
             if d2 == "state" and d1 in ["full", "base", "mean"]:
@@ -703,7 +755,7 @@ class ModeDescriptor(object):
                   self.absolute = True
                else:
                   raise DescriptorError("modifier", a, invalid=True)
-               if f == "" or f == "from base":
+               if f in ["", "from base"]:
                   self.reference = "base"
                elif f == "from mean":
                   self.reference = "mean"
@@ -716,6 +768,18 @@ class ModeDescriptor(object):
    def __init_from_properties(self, d, a, t, r):
       """
       Initialize from mode properties.
+
+      Arguments:
+         d (int) : dimensionality
+         a (bool) : absolute value or not
+         t (string) : transformation to be applied
+         r (string) : reference state
+
+      Returns:
+         None
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
       if a and d == 1:
@@ -748,6 +812,15 @@ class ModeDescriptor(object):
    def __repr__(self):
       """
       Supply a detailed representation of the mode.
+
+      Arguments:
+         None
+
+      Returns:
+         None
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
       if self.dimension == 1:
@@ -801,6 +874,16 @@ class ModeDescriptor(object):
       extraction is done on the full 3D state, and the plotting routine is
       responsible for understanding enough about the mode to process the data
       into its final form.
+
+      Arguments:
+         variable (string) : the name of the variable to be extracted
+         state (SimulationState) : the state of the simulation
+
+      Returns:
+         the variable array
+
+      Exceptions:
+         DescriptorError describing invalid options or combinations of options
       """
 
       if self.transform == "none":
@@ -846,3 +929,4 @@ class ModeDescriptor(object):
 # End class ModeDescriptor
 #==============================================================================
 #------------------------------------------------------------------------------
+

@@ -1,12 +1,11 @@
 """
-Driver for making movies
+Driver for making movies.
 
-This parses the command line, does some housekeeping, compiling the appropriate
-descriptors from input files, any parallelization, and "outermost loop" tasks
-of this sort to set up what's necessary to run the movie maker.
+This parses the command line, does some housekeeping, compiles the appropriate
+descriptors from input files, handles parallelization, and does other
+"outermost loop" tasks of this sort to set up what's necessary to run the movie
+maker.
 """
-
-# TODO : Rewrite the header comment
 
 # TODO : Develop an extensive testing suite
 
@@ -25,9 +24,12 @@ sys.path.append("/Users/bkrueger/research/CCSNe/heating_layer/results/sample/dum
 #------------------------------------------------------------------------------
 #==============================================================================
 
+from __future__ import division
+
 import argparse as ap
 import glob
 import tomlpython as toml
+import pypar
 import warnings
 
 import Descriptors as Desc
@@ -37,9 +39,7 @@ from MakeFrames import make_all_frames
 
 def pretty(d, indent=0):
    """
-   Pretty-printing for nested dictionaries.
-
-   A convenient helper routine for testing.
+   Pretty-printing for nested dictionaries; convenient for testing.
    """
    for key, value in d.iteritems():
       print '   ' * indent + str(key)
@@ -51,6 +51,10 @@ def pretty(d, indent=0):
 #==============================================================================
 
 if __name__ == "__main__":
+
+   # Parallel setup - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   NProcs = pypar.size()
+   ProcID = pypar.rank()
 
    # Parse command-line arguments - - - - - - - - - - - - - - - - - - - - - - -
    prog_desc = "Generate a set of movies from DUMSES data files."
@@ -79,21 +83,35 @@ if __name__ == "__main__":
    # Set up - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
    # Generate the list of DUMSES outputs to plot.
-   output_list = sorted(glob.glob(args.directory + "output_*"))
-   # TODO : Future development will parallelize by having a master processor
-   #        get a complete list of the DUMSES outputs, then distribute that
-   #        list among all processors (including itself), and then each
-   #        processor will proceed as usual from there.
+   #output_list = sorted(glob.glob(args.directory + "output_*"))
+   if ProcID == 0:
+      full_list = sorted(glob.glob(args.directory + "output_*"))
+      if NProcs > 1:
+         ihi = len(full_list) // Nprocs
+         output_list = full_list[:ihi]
+         for i in xrange(1, NProcs):
+            ilo = len(full_list) * i // NProcs
+            ihi = len(full_list) * (i+1) // NProcs
+            pypar.send(full_list[ilo:ihi], destination=i)
+      else:
+         output_list = full_list
+   else:
+      output_list = pypar.receive(0)
 
-   # Get the movie descriptions
+   # Get the movie and mask descriptions
    with open(args.mfile) as tomlfile:
       descriptions = toml.parse(tomlfile)
 
-   # Construct the descriptors
+   # Construct the mask descriptors
    masks = {}
    for name, mask_string in descriptions["masks"].items():
       masks[name] = Desc.MaskDescriptor(mask_string)
 
+   # Construct the movie descriptors
+   # -- If the user specified a list of movies, only make those movies.  Warn
+   #    the user if a requested movies is missing, but continue anyway.
+   # -- If the user did not specify a list of movies, make all movies described
+   #    in the movies file.
    movies = {}
    for name, movie_string in descriptions["movies"].items():
       if args.movie_list is None or name in args.movie_list:
@@ -105,12 +123,12 @@ if __name__ == "__main__":
                args.mfile, '.'))
             warnings.warn(msg, UserWarning)
 
-   # Repeat input
+   # Summarize masks and movies
    print "="*79
    print "found {n} masks:".format(n=len(masks))
    for name, mask in masks.items():
       print "   {0}:".format(name), mask
-   print "found {n} movies:".format(n=len(movies))
+   print "making {n} movies:".format(n=len(movies))
    for name, movie in movies.items():
       print "   {0}:".format(name), movie
    print "="*79
@@ -121,4 +139,6 @@ if __name__ == "__main__":
    # Encode the movies
    # TODO : For every movie that calls for this step, encode the individual
    # frame images into a movie.
+
+   pypar.finalize()
 

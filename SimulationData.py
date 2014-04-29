@@ -1,6 +1,10 @@
 """
 Specification of simulation descriptions
 
+The SimulationError object describes errors that arise from classes defined
+here.  This allows calling routines to distinguish errors from this body of
+code from other, more generic errors.
+
 The SimulationInput object describes the setup of the simulation.  This
 includes parameters such as the upstream conditions used to construct the
 initial state, the adiabatic index for the equation of state, and the
@@ -8,7 +12,7 @@ description of the sources.
 
 The SimulationVariable object describes a variable that can be extracted from
 the data.  This includes a function to compute the variable, the default name
-of the variable, and how the variable related to zero ("lower bound", "center",
+of the variable, and how the variable relates to zero ("lower bound", "center",
 or None).
 
 The SimulationState object packages the data from the current state of a
@@ -16,9 +20,10 @@ simulation.  It also provides a mechanism for extracting a number of different
 quantities in a convenient way.
 
 Attributes:
+   SimulationError (class) : an error that occurred in a class defined here
    SimulationInput (class) : a description of the simulation
    SimulationVariable (class) : a description of a variable
-   SimulationState (class) : the current state of the simulation
+   SimulationState (class) : a description of one state of the simulation
 """
 
 import numpy as np
@@ -31,6 +36,7 @@ class SimulationError(StandardError):
    """
    Signals that a simulation data object encountered an error.
    """
+   pass
 
 # End class SimulationError
 #==============================================================================
@@ -143,17 +149,22 @@ class SimulationInput(object):
 
       Arguments:
          inputs_file_name (string) : the name of the inputs file to parse
+
+      Returns:
+         None
+
+      Exceptions:
+         whatever arises from functions called by this routine
       """
 
       # Data to extract from the parameters file, using defaults as appropriate
       # to match DUMSES code
-      # note : By default all values should be cast to strings.  This is
-      #        because the input is read from a Fortran name list file, and
-      #        Fortran allows scientific notation with a "d" instead of an "e"
-      #        to specify double-precision, so I run a replace on all values,
-      #        which requires that the values be strings.  The exception is
-      #        values that require special handling anyway, so that they are
-      #        not run through the default process.
+      #    By default all values should be cast to strings.  This is because
+      # the input is read from a Fortran name list file, and Fortran allows
+      # scientific notation with a "d" instead of an "e" to specify
+      # double-precision, so I run a replace on all values, which requires that
+      # the values be strings.  The exception is values that require special
+      # handling anyway, so that they are not run through the default process.
       inputs_dict = {"gamma" : str(4.0 / 3.0),
                      "csnd_up" : str(1.0),
                      "dens_up" : str(1.0),
@@ -229,12 +240,18 @@ class SimulationInput(object):
    #===========================================================================
    def _shape_function(self, x, y, z):
       """
-      Return the shape function.
+      Compute the shape function.
 
       Arguments:
          x (numpy.ndarray) : the x coordinates
          y (numpy.ndarray) : the y coordinates
          z (numpy.ndarray) : the z coordinates
+
+      Returns:
+         an array specifying the shape function on the grid
+
+      Exceptions:
+         SimulationError flagging an uninitialized object
       """
 
       if not self.__initialized:
@@ -259,12 +276,18 @@ class SimulationInput(object):
    #===========================================================================
    def gravity(self, x, y, z):
       """
-      Return the gravitational acceleration
+      Compute the gravitational acceleration
 
       Arguments:
          x (numpy.ndarray) : the x coordinates
          y (numpy.ndarray) : the y coordinates
          z (numpy.ndarray) : the z coordinates
+
+      Returns:
+         an array specifying the gravitational acceleration on the grid
+
+      Exceptions:
+         SimulationError flagging an uninitialized object
       """
 
       if not self.__initialized:
@@ -280,13 +303,19 @@ class SimulationInput(object):
    #===========================================================================
    def heating(self, x, y, z, density):
       """
-      Return the heating rate (source for total energy density per time).
+      Compute the heating rate (source for total energy density per time).
 
       Arguments:
          x (numpy.ndarray) : the x coordinates
          y (numpy.ndarray) : the y coordinates
          z (numpy.ndarray) : the z coordinates
          density (numpy.ndarray) : the density
+
+      Returns:
+         an array specifying the heating rate on the grid
+
+      Exceptions:
+         SimulationError flagging an uninitialized object
       """
 
       if not self.__initialized:
@@ -309,15 +338,16 @@ class SimulationVariable(object):
    A variable, including a function to compute it and how it relates to zero.
 
    The SimulationState "knows" a collection of variables.  To "know" a
-   variable, it must have one or more names (held by SimulationState to be
-   hashable, although SimulationVariable will hold a default name) and two
-   attributes (held by SimulationVariable): a function to compute the variable
-   and a parameter describing how the variable relates to zero (generally one
-   of "lower bound", "center", or None).  SimulationState is the object that
-   knows the variables, and SimulationVariable is only a convenience object to
-   package that information together.  Thus the SimulationVariable object is
-   mostly dummy information that will be filled in by the SimulationState when
-   it generates its collection of known variables.
+   variable, it must have one or more names (SimulationState maintains a
+   complete list, including aliases, although although SimulationVariable will
+   hold a default name) and two attributes (held by SimulationVariable): a
+   function to compute the variable and a parameter describing how the variable
+   relates to zero (generally one of "lower bound", "center", or None).
+   SimulationState is the object that knows the variables, and
+   SimulationVariable is only a convenience object to package that information
+   together.  Thus the SimulationVariable object is mostly dummy information
+   that will be filled in by the SimulationState when it generates its
+   collection of known variables.
 
    Attributes:
       name (str) : the name of the variable
@@ -361,7 +391,7 @@ class SimulationState(object):
 
    This class stores the current state of a simulation, which includes the full
    and base states of mass density, momentum density, total energy density, as
-   well as the time and axes for the state.  This much is similar to the
+   well as the time and the coordinate axes.  This much is similar to the
    DumsesData class, to which this is closely related (and a method exists to
    construct the SimulationState from a DumsesData because of this close
    relation).  The primary difference is that the SimulationState will also
@@ -410,7 +440,7 @@ class SimulationState(object):
       Supply a simple representation of the class.
       """
       if self.__initialized:
-         string = "Simulation data (initialized)"
+         string = "Simulation data at t = {0:13.6e}".format(t=self.t)
       else:
          string = "Simulation data (uninitialized)"
       return string
@@ -609,6 +639,12 @@ class SimulationState(object):
       Arguments:
          dumpy (DumsesData) : to be used as a basis to construct this object
          input_parameters (SimulationInputs) : parameters from inputs file
+
+      Returns:
+         None
+
+      Exceptions:
+         whatever arises from functions called by this routine
       """
 
       # Extract and check values
@@ -659,13 +695,19 @@ class SimulationState(object):
       self.__initialized = True
 
    #===========================================================================
-   def extract(self, variable_name, full_state=True):
+   def extract(self, variable_name, use_full_state=True):
       """
       Extract the desired variable in the desired mode.
 
       Arguments:
          variable_name (string) : name of the variable to be extracted
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
+
+      Returns:
+         array holding the data for the requested variable
+
+      Exceptions:
+         SimulationError flagging an uninitialized object or unknown variable
       """
 
       if not self.__initialized:
@@ -680,7 +722,7 @@ class SimulationState(object):
          msg = 'Unrecognized variable: "{v}"'.format(v=variable_name)
          raise SimulationError(msg)
 
-      var = func(full_state)
+      var = func(use_full_state)
 
       return var
 
@@ -779,405 +821,405 @@ class SimulationState(object):
       return dqdz
 
    #===========================================================================
-   def _func_density(self, full_state):
+   def _func_density(self, use_full_state):
       """
       Extract the density in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_state:
+      if use_full_state:
          return self._dens
       else:
          return self._dens0
 
    #===========================================================================
-   def _func_x_momentum(self, full_state):
+   def _func_x_momentum(self, use_full_state):
       """
       Extract the x-momentum in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_state:
+      if use_full_state:
          return self._momv[:,:,:,0]
       else:
          return self._momv0
 
    #===========================================================================
-   def _func_y_momentum(self, full_state):
+   def _func_y_momentum(self, use_full_state):
       """
       Extract the y-momentum in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_state:
+      if use_full_state:
          return self._momv[:,:,:,1]
       else:
          return np.zeros_like(self._momv0)
 
    #===========================================================================
-   def _func_z_momentum(self, full_state):
+   def _func_z_momentum(self, use_full_state):
       """
       Extract the z-momentum in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_state:
+      if use_full_state:
          return self._momv[:,:,:,2]
       else:
          return np.zeros_like(self._momv0)
 
    #===========================================================================
-   def _func_momentum_magnitude(self, full_state):
+   def _func_momentum_magnitude(self, use_full_state):
       """
       Extract the magnitude of the momentum in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_state:
+      if use_full_state:
          return np.sqrt(np.sum(self._momv**2, axis=-1))
       else:
          return np.abs(self._momv0)
 
    #===========================================================================
-   def _func_x_velocity(self, full_state):
+   def _func_x_velocity(self, use_full_state):
       """
       Extract the x-velocity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_x_momentum(full_state) / \
-             self._func_density(full_state)
+      return self._func_x_momentum(use_full_state) / \
+             self._func_density(use_full_state)
 
    #===========================================================================
-   def _func_y_velocity(self, full_state):
+   def _func_y_velocity(self, use_full_state):
       """
       Extract the y-velocity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_y_momentum(full_state) / \
-             self._func_density(full_state)
+      return self._func_y_momentum(use_full_state) / \
+             self._func_density(use_full_state)
 
    #===========================================================================
-   def _func_z_velocity(self, full_state):
+   def _func_z_velocity(self, use_full_state):
       """
       Extract the z-velocity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_z_momentum(full_state) / \
-             self._func_density(full_state)
+      return self._func_z_momentum(use_full_state) / \
+             self._func_density(use_full_state)
 
    #===========================================================================
-   def _func_velocity_magnitude(self, full_state):
+   def _func_velocity_magnitude(self, use_full_state):
       """
       Extract the magnitude of the velocity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_momentum_magnitude(full_state) / \
-             self._func_density(full_state)
+      return self._func_momentum_magnitude(use_full_state) / \
+             self._func_density(use_full_state)
 
    #===========================================================================
-   def _func_x_vorticity(self, full_state):
+   def _func_x_vorticity(self, use_full_state):
       """
       Extract the x-vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      vely = self._func_y_velocity(full_state)
-      velz = self._func_z_velocity(full_state)
+      vely = self._func_y_velocity(use_full_state)
+      velz = self._func_z_velocity(use_full_state)
       vrtx = self._y_derivative(velz) - self._z_derivative(vely)
       return vrtx
 
    #===========================================================================
-   def _func_y_vorticity(self, full_state):
+   def _func_y_vorticity(self, use_full_state):
       """
       Extract the y-vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      velx = self._func_x_velocity(full_state)
-      velz = self._func_z_velocity(full_state)
+      velx = self._func_x_velocity(use_full_state)
+      velz = self._func_z_velocity(use_full_state)
       vrty = self._z_derivative(velx) - self._x_derivative(velz)
       return vrty
 
    #===========================================================================
-   def _func_z_vorticity(self, full_state):
+   def _func_z_vorticity(self, use_full_state):
       """
       Extract the z-vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      velx = self._func_x_velocity(full_state)
-      vely = self._func_y_velocity(full_state)
+      velx = self._func_x_velocity(use_full_state)
+      vely = self._func_y_velocity(use_full_state)
       vrtz = self._x_derivative(vely) - self._y_derivative(velx)
       return vrtz
 
    #===========================================================================
-   def _func_vorticity_magnitude(self, full_state):
+   def _func_vorticity_magnitude(self, use_full_state):
       """
       Extract the magnitude of the vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtx = self._func_x_vorticity(full_state)
-      vrty = self._func_y_vorticity(full_state)
-      vrtz = self._func_z_vorticity(full_state)
+      vrtx = self._func_x_vorticity(use_full_state)
+      vrty = self._func_y_vorticity(use_full_state)
+      vrtz = self._func_z_vorticity(use_full_state)
       magnitude = np.sqrt(vrtx**2 + vrty**2 + vrtz**2)
       return magnitude
 
    #===========================================================================
-   def _func_x_specific_vorticity(self, full_state):
+   def _func_x_specific_vorticity(self, use_full_state):
       """
       Extract the specific x-vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtx = self._func_x_vorticity(full_state)
-      dens = self._func_density(full_state)
+      vrtx = self._func_x_vorticity(use_full_state)
+      dens = self._func_density(use_full_state)
       return vrtx / dens
 
    #===========================================================================
-   def _func_y_specific_vorticity(self, full_state):
+   def _func_y_specific_vorticity(self, use_full_state):
       """
       Extract the specific y-vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrty = self._func_y_vorticity(full_state)
-      dens = self._func_density(full_state)
+      vrty = self._func_y_vorticity(use_full_state)
+      dens = self._func_density(use_full_state)
       return vrty / dens
 
    #===========================================================================
-   def _func_z_specific_vorticity(self, full_state):
+   def _func_z_specific_vorticity(self, use_full_state):
       """
       Extract the specific z-vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtz = self._func_z_vorticity(full_state)
-      dens = self._func_density(full_state)
+      vrtz = self._func_z_vorticity(use_full_state)
+      dens = self._func_density(use_full_state)
       return vrtz / dens
 
    #===========================================================================
-   def _func_specific_vorticity_magnitude(self, full_state):
+   def _func_specific_vorticity_magnitude(self, use_full_state):
       """
       Extract the magnitude of the specific vorticity in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      vrtx = self._func_x_vorticity(full_state)
-      vrty = self._func_y_vorticity(full_state)
-      vrtz = self._func_z_vorticity(full_state)
+      vrtx = self._func_x_vorticity(use_full_state)
+      vrty = self._func_y_vorticity(use_full_state)
+      vrtz = self._func_z_vorticity(use_full_state)
       magnitude = np.sqrt(vrtx**2 + vrty**2 + vrtz**2)
-      dens = self._func_density(full_state)
+      dens = self._func_density(use_full_state)
       return magnitude / dens
 
    #===========================================================================
-   def _func_kinetic_energy_density(self, full_state):
+   def _func_kinetic_energy_density(self, use_full_state):
       """
       Extract the kinetic energy density in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      momentum = self._func_momentum_magnitude(full_state)
-      kinetic = 0.5 * momentum**2 / self._func_density(full_state)
+      momentum = self._func_momentum_magnitude(use_full_state)
+      kinetic = 0.5 * momentum**2 / self._func_density(use_full_state)
       return kinetic
 
    #===========================================================================
-   def _func_kinetic_energy_specific(self, full_state):
+   def _func_kinetic_energy_specific(self, use_full_state):
       """
       Extract the specific kinetic energy in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      momentum = self._func_momentum_magnitude(full_state)
-      kinetic = 0.5 * (momentum / self._func_density(full_state))**2
+      momentum = self._func_momentum_magnitude(use_full_state)
+      kinetic = 0.5 * (momentum / self._func_density(use_full_state))**2
       return kinetic
 
    #===========================================================================
-   def _func_total_energy_density(self, full_state):
+   def _func_total_energy_density(self, use_full_state):
       """
       Extract the total energy density in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      if full_state:
+      if use_full_state:
          return self._Ener
       else:
          return self._Ener0
 
    #===========================================================================
-   def _func_total_energy_specific(self, full_state):
+   def _func_total_energy_specific(self, use_full_state):
       """
       Extract the specific total energy in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      Ener = self._func_total_energy_density(full_state) / \
-             self._func_density(full_state)
+      Ener = self._func_total_energy_density(use_full_state) / \
+             self._func_density(use_full_state)
 
       return Ener
 
    #===========================================================================
-   def _func_internal_energy_density(self, full_state):
+   def _func_internal_energy_density(self, use_full_state):
       """
       Extract the internal energy density in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_total_energy_density(full_state) - \
-             self._func_kinetic_energy_density(full_state)
+      return self._func_total_energy_density(use_full_state) - \
+             self._func_kinetic_energy_density(use_full_state)
 
    #===========================================================================
-   def _func_internal_energy_specific(self, full_state):
+   def _func_internal_energy_specific(self, use_full_state):
       """
       Extract the specific internal energy in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_total_energy_specific(full_state) - \
-             self._func_kinetic_energy_specific(full_state)
+      return self._func_total_energy_specific(use_full_state) - \
+             self._func_kinetic_energy_specific(use_full_state)
 
    #===========================================================================
-   def _func_pressure(self, full_state):
+   def _func_pressure(self, use_full_state):
       """
       Extract the pressure in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_internal_energy_density(full_state) * \
+      return self._func_internal_energy_density(use_full_state) * \
              (self.params.gamma - 1.0)
 
    #===========================================================================
-   def _func_entropy_specific(self, full_state):
+   def _func_entropy_specific(self, use_full_state):
       """
       Extract the specific entropy in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      PP = self._func_pressure(full_state) / self.params.pres_up
-      dd = self._func_density(full_state) / self.params.dens_up
+      PP = self._func_pressure(use_full_state) / self.params.pres_up
+      dd = self._func_density(use_full_state) / self.params.dens_up
       Y = self.params.gamma
       return np.log(PP * dd**(-Y)) / (Y - 1.0)
 
    #===========================================================================
-   def _func_entropy_density(self, full_state):
+   def _func_entropy_density(self, use_full_state):
       """
       Extract the entropy density in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_entropy_specific(full_state) * \
-             self._func_density(full_state)
+      return self._func_entropy_specific(use_full_state) * \
+             self._func_density(use_full_state)
 
    #===========================================================================
-   def _func_sound_speed(self, full_state):
+   def _func_sound_speed(self, use_full_state):
       """
       Extract the speed of sound in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      c2 = self.params.gamma * self._func_pressure(full_state) / \
-            self._func_density(full_state)
+      c2 = self.params.gamma * self._func_pressure(use_full_state) / \
+            self._func_density(use_full_state)
       return np.sqrt(c2)
 
    #===========================================================================
-   def _func_Mach_number(self, full_state):
+   def _func_Mach_number(self, use_full_state):
       """
       Extract the Mach number in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      return self._func_velocity_magnitude(full_state) / \
-             self._func_sound_speed(full_state)
+      return self._func_velocity_magnitude(use_full_state) / \
+             self._func_sound_speed(use_full_state)
 
    #===========================================================================
-   def _func_enthalpy_specific(self, full_state):
+   def _func_enthalpy_specific(self, use_full_state):
       """
       Extract the specific enthalpy in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      u = self._func_internal_energy_specific(full_state)
-      pdv = self._func_pressure(full_state) / \
-            self._func_density(full_state)
+      u = self._func_internal_energy_specific(use_full_state)
+      pdv = self._func_pressure(use_full_state) / \
+            self._func_density(use_full_state)
       return u + pdv
 
    #===========================================================================
-   def _func_enthalpy_density(self, full_state):
+   def _func_enthalpy_density(self, use_full_state):
       """
       Extract the enthalpy density in the desired mode.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
-      u = self._func_internal_energy_density(full_state)
-      pdv = self._func_pressure(full_state)
+      u = self._func_internal_energy_density(use_full_state)
+      pdv = self._func_pressure(use_full_state)
       return u + pdv
 
    #===========================================================================
-   def _func_convective_growth_rate(self, full_state):
+   def _func_convective_growth_rate(self, use_full_state):
       """
       Extract the convective growth rate in the desired mode.
 
@@ -1193,11 +1235,11 @@ class SimulationState(object):
       the gradient of the base state specific entropy.
 
       Arguments:
-         full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : return full state (True) or base state (False)
       """
 
       g = self.params.gravity(self.x, self.y, self.z)
-      s = self._func_entropy_specific(full_state)
+      s = self._func_entropy_specific(use_full_state)
       grad_s_x = self._x_derivative(s)
       grad_s_y = self._y_derivative(s)
       grad_s_z = self._z_derivative(s)

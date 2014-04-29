@@ -7,12 +7,19 @@ DUMSES output file names and a list of MovieDescriptors, then loops as
 appropriate to make the frames.  It can also be entered one level farther down,
 to the make_single_frame routine (which is called by the make_all_frames
 loops), which takes the name of a single DUMSES output and a single
-MovieDescriptor, then draws the appropriate frame.
+MovieDescriptor, then draws the appropriate frame.  The make_single_frame
+routine uses several support routines to draw the panels for each image.  The
+panel_2D_pseudocolor routine takes a state, movie description, and axes, and
+draws a two-dimensional psuedocolor plot  on the axes using the data in the
+state and the description of the movie.  The panel_profile function is
+analogous, but draws a one-dimensional profile (along the x axis due to its
+special nature).
 
 Attributes:
    make_all_frames : makes all frames for lists of outputs and movies
    make_single_frame : makes a single frame for a given output and movie
    panel_2D_pseudocolor : draws a 2D pseudocolor plot on a given axes
+   panel_panel : draws a 1D profile plot on a given axes
 """
 
 # TODO : When going back through and cleaning up the errors/exceptions/warnings
@@ -52,18 +59,23 @@ def make_all_frames(data_list, movie_list):
    Makes all the frames based on a list of data sources and a list of movies.
 
    Arguments:
-      data_list (list of strings) : list of DUMSES outputs
+      data_list (list of strings) : list of filenames of DUMSES outputs
       movie_list (list of MovieDescriptors) : list of movies to make
+
+   Returns:
+      None
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
-   # Basic sanity checks - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   # Set up checks - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-   list_of_stubs = []
-   s_blacklist = set()
-   v_blacklist = set()
+   # Ensure all movies have unique stubs
+   list_of_stubs = []   # stubs we've seen
+   s_blacklist = set()  # stubs to remove
+
    for movie in movie_list.values():
-
-      # Do all movies have unique stubs?
       if movie.stub in list_of_stubs:
          if movie.stub not in s_blacklist: # Only warn once per repeated stub
             msg = "".join(("Multiple movies with stub ", movie.stub,
@@ -73,18 +85,17 @@ def make_all_frames(data_list, movie_list):
       else:
          list_of_stubs.append(movie.stub)
 
-   # Remove any disallowed MovieDescriptors
    movie_list = {m : movie_list[m] for m in movie_list
-         if movie_list[m].stub not in s_blacklist
-         if movie_list[m].variable not in v_blacklist}
+         if movie_list[m].stub not in s_blacklist}
 
+   # Split the loops because these steps apply only to movies we actually
+   # intend to generate
    profile_mode = False
    for movie in movie_list.values():
 
       # Do any of the surviving movies need the initial state?
       if movie.mode.dimension == 1:
          profile_mode = True
-         break
 
       # If any of the movies have absolute paths (allowed in general for the
       # MovieDescriptor, because it is not tied to this set of drawing
@@ -107,19 +118,15 @@ def make_all_frames(data_list, movie_list):
 
    # Master loop - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-   # -- Loop over each output file first, because we only want to load each
-   #    file once.
+   # Loop over each output file first, because loading the files seems to be
+   # one of the bottlenecks.
    for output_name in data_list:
 
       # Parse the output_name
-      # -- The name is in the format "/subpath/subpath/output_######", with
-      #    a possible trailing "/".
-      # -- DumsesData expects the path (all the "subpath" bits, ending in a
-      #    "/") and the number (the ###### as an integer).
+      # -- DumsesData expects the path (ending in a slash) and the number
       # -- We will assume that a series consists of files stored in the same
-      #    directory (we use realpath to make sure different ways of referring
-      #    to the same directory are still counted as the same series), and we
-      #    assume that a series shares a common inputs file.
+      #    directory, and we assume that a series shares a common inputs file
+      #    (also in the same directory).
       path = os.path.dirname(os.path.realpath(output_name)) + "/"
       filename = os.path.basename(output_name)
       try:
@@ -130,7 +137,18 @@ def make_all_frames(data_list, movie_list):
          warnings.warn(msg, UserWarning)
          continue
 
-      # Open the input and output files to construct the state
+      # Update the inputs file if necessary
+      if series_name != path:
+         try:
+            si = SD.SimulationInput(path + "input")
+         except IOError:
+            msg = "".join((
+               'Unable to open inputs file corresponding to data file "',
+               output_name, '".  This file will be skipped.'))
+            warnings.warn(msg, UserWarning)
+            continue
+
+      # Open the DUMSES output file
       try:
          data = DumsesData(number, filedir=path)
       except IOError:
@@ -138,38 +156,38 @@ def make_all_frames(data_list, movie_list):
             '".  This file will be skipped.'))
          warnings.warn(msg, UserWarning)
          continue
-      try:
-         si = SD.SimulationInput(path + "input")
-      except IOError:
-         msg = "".join((
-            'Unable to open inputs file corresponding to data file "',
-            output_name, '".  This file will be skipped.'))
-         warnings.warn(msg, UserWarning)
-         continue
+
+      # Repackage into a SimulationState object
       state = SD.SimulationState(data, si)
 
       # Update the (t == 0) entry if necessary
       if profile_mode and series_name != path:
          if state.t == 0:
+            # If we just opened the t == 0 file, then everything is easy
             state0 = state
             series_name = path
          else:
+            # We need to open the t == 0 file for this series
             try:
                data0 = DumsesData(0, filedir=path)
                state0 = SD.SimulationState(data0, si)
                series_name = path
             except IOError:
+               # Problem opening file; skip all the t == 0 stuff when plotting
                msg = "Unable to open initial state for series " + path + \
                      "; no initial profiles will be plotted."
                warnings.warn(msg, UserWarning)
                state0 = None
                series_name = None
 
+      # Loop over all the movies
       for movie in movie_list.values():
+         # Only make frames in the time range
          if movie.within_time_limits(state.t):
             try:
                make_single_frame(state, movie, path, number, state0)
             except (Desc.DescriptorError, SD.SimulationError) as err:
+               # Well that didn't work... guess we'll move on
                msg = "".join(("While generating movie ", str(movie),
                   " with data file ", output_name,
                   ", the following error occurred:\n   ", str(err),
@@ -180,7 +198,7 @@ def make_all_frames(data_list, movie_list):
 
 def make_single_frame(state, movie, directory, number, state0=None):
    """
-   Make a single frame based on the current state and a movie description.
+   Draw a single frame of the movie
 
    In order to be generic for future development, this will be a fairly
    lightweight wrapper.  It creates a new figure, creates a subplot that fills
@@ -191,11 +209,12 @@ def make_single_frame(state, movie, directory, number, state0=None):
    calling the appropriate drawing routines.
 
    Note on file locations: If the MovieDescriptor has an absolute path, the
-   image will be stored there.  If the MovieDescriptor has a relative path, it
+   movie will be stored there.  If the MovieDescriptor has a relative path, it
    will be assumed to be relative to the directory where the simulation data
    file is stored.  If the MovieDescriptor has no path (i.e., is None), the
-   image will be stored in the same directory where the simulation data is
-   found.
+   movie will be stored in the same directory where the simulation data is
+   found.  The frame images will be stored in a subdirectory called "frames"
+   relative to the directory where the movie will be stored.
 
    Arguments:
       state (SimulationState) : the current state of the simulation
@@ -203,6 +222,12 @@ def make_single_frame(state, movie, directory, number, state0=None):
       directory (string) : the directory where the simulation data is stored
       number (int) : the number of the current data file
       state0 (SimulationState) : the initial state of the simulation (or None)
+
+   Returns:
+      None
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
    print "Making frame {s}{n:06d} (t = {t}).".format(t=state.t, s=movie.stub,
@@ -211,7 +236,7 @@ def make_single_frame(state, movie, directory, number, state0=None):
    # Generate and partition the figures
    plt.ioff()
    fig = plt.figure()
-   ax1 = fig.add_axes([0, 0.05, 1, 0.9])
+   ax1 = fig.add_axes([0, 0.05, 1, 0.9]) # left, bottom, width, height
 
    # Fill the panels (Axes)
    if movie.mode.dimension == 1:
@@ -230,6 +255,7 @@ def make_single_frame(state, movie, directory, number, state0=None):
       path = directory + movie.path
    if path[-1] != "/":           # Make sure there's a trailing "/"
       path += "/"
+   path += "frames/"             # Subdirectory "frames"
    try:
       os.makedirs(path)
    except OSError as e:
@@ -249,20 +275,26 @@ def panel_2D_pseudocolor(state, movie, axes):
    Draw a 2D pseudocolor plot as one panel of a figure.
 
    This routine assumes that we are plotting a slice in the xy-plane at a
-   z-index of zero.  This can be modified later if I need to be worrying about
-   3D data.
+   z-index of zero.  This comes from the structure of data in DUMSES for a 2D
+   simulation, and can be modified later if I generate 3D data to visualize.
 
    Arguments:
       state (SimulationState) : the current state of the simulation
       movie (MovieDescriptor) : the description of the movie to be made
       axes (matplotlib.axes.Axes) : the axes to draw the pseudocolor plot on
+
+   Returns:
+      None
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
    # Get the data to be drawn
    data, x, y, z, vlo, vhi = movie.frame_data(state)
 
    # Since we are drawing in 2D, reduce to the assumed geometry
-   # Also, transform to the orientation expected by imshow
+   # --> Also, transform to the orientation expected by imshow
    plot_data = np.flipud(data[:,:,0])
    xx = y[0,:,0]
    yy = x[:,0,0]
@@ -303,11 +335,28 @@ def panel_profile(state, movie, ax_prof, state0=None):
    This routine assumes that we are plotting a profile along the x-axis, and
    computes the mean and standard deviation along that axis.
 
+   The figure is split into two panels:
+      the upper panel:
+         the mean state +/- the standard deviation
+         the unperturbed base state +/- the initial standard deviation
+         the initial maximum and minimum states
+      the lower panel:
+         the standard deviation
+         the initial standard deviation
+   The profiles derived from the initial state will not be plotted if None is
+   supplied for state0.
+
    Arguments:
       state (SimulationState) : the current state of the simulation
-      state0 (SimulationState) : the initial state of the simulation
       movie (MovieDescriptor) : the description of the movie to be made
       axes (matplotlib.axes.Axes) : the axes to draw the profile plot on
+      state0 (SimulationState) : the initial state of the simulation
+
+   Returns:
+      None
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
    pad = 0.075

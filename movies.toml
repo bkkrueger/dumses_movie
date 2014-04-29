@@ -65,3 +65,23 @@
    fps = 20
    final_pause = "0.35s"
 
+[movies.profile4]
+   stub = "prof4_"
+   path = "movies/test"
+   variable = "sound speed"
+   mode = "profile: full state"
+   image_type = "png"
+   movie_type = "avi"
+   fps = 20
+   final_pause = "0.35s"
+
+[movies.profile5]
+   stub = "prof5_"
+   path = "movies/test"
+   variable = "x velocity"
+   mode = "profile: full state"
+   image_type = "png"
+   movie_type = "avi"
+   fps = 20
+   final_pause = "0.35s"
+
