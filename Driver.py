@@ -19,8 +19,8 @@ from __future__ import division
 # file is not the best plan.  Thus I just use sys.path to add the location of
 # the test version of DumPy_v05.
 # TODO : take this out to test on other systems
-import sys
-sys.path.append("/Users/bkrueger/research/CCSNe/heating_layer/results/sample/dumses/visu")
+#import sys
+#sys.path.append("/Users/bkrueger/research/CCSNe/heating_layer/results/sample/dumses/visu")
 #------------------------------------------------------------------------------
 #==============================================================================
 
@@ -169,10 +169,10 @@ if __name__ == "__main__":
    if ProcID == 0:
       print "="*79
       print "found {n} masks:".format(n=len(masks))
-      for name, mask in masks.items():
+      for name, mask in sorted(masks.items()):
          print "   {0}:".format(name), mask
       print "making {n} movies:".format(n=len(movies))
-      for name, movie in movies.items():
+      for name, movie in sorted(movies.items()):
          print "   {0}:".format(name), movie
       print "="*79
 

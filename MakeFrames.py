@@ -34,6 +34,8 @@ Attributes:
 
 import copy
 import errno
+import matplotlib
+matplotlib.use('Agg')   # Needed to run on IRFUCOAST
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
