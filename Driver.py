@@ -139,5 +139,6 @@ if __name__ == "__main__":
    # TODO : For every movie that calls for this step, encode the individual
    # frame images into a movie.
 
+   pypar.barrier()
    pypar.finalize()
 

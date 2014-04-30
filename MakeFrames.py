@@ -415,7 +415,6 @@ def panel_profile(state, movie, ax_prof, state0=None):
 
    # Label axes and set ticks
    plt.setp(ax_prof.get_xticklabels(), visible=False)
-   ax_prof.set_ylim((vlo, vhi))
    ax_prof.set_ylabel("profile")
    ax_stdv.set_xlabel("position")
    ax_stdv.set_ylabel("standard deviation")
