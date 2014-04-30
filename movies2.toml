@@ -1,0 +1,20 @@
+[movies.conv_growth]
+   stub = 'wbv_'
+   path = 'movies/test/'
+   variable = 'convective growth rate'
+   mode = 'pseudocolor: full state'
+   window_x_lo = -1.5
+   window_x_hi =  1.5
+   make_movie = false
+   image_type = 'png'
+
+[movies.profile5]
+   stub = "prof5_"
+   path = "movies/test"
+   variable = "x velocity"
+   mode = "profile: full state"
+   image_type = "png"
+   movie_type = "avi"
+   fps = 20
+   final_pause = "0.35s"
+
