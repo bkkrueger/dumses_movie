@@ -190,7 +190,7 @@ def make_all_frames(data_list, movie_list):
 
 #==============================================================================
 
-def make_single_frame(state, movie, directory, number, state0=None):
+def make_single_frame(state, movie, data_dir, data_num, state0=None):
    """
    Draw a single frame of the movie
 
@@ -213,8 +213,8 @@ def make_single_frame(state, movie, directory, number, state0=None):
    Arguments:
       state (SimulationState) : the current state of the simulation
       movie (MovieDescriptor) : the description of the movie to be made
-      directory (string) : the directory where the simulation data is stored
-      number (int) : the number of the current data file
+      data_dir (string) : the directory where the simulation data is stored
+      data_num (int) : the number of the current data file
       state0 (SimulationState) : the initial state of the simulation (or None)
 
    Returns:
@@ -225,7 +225,7 @@ def make_single_frame(state, movie, directory, number, state0=None):
    """
 
    print "Making frame {s}{n:06d} (t = {t}).".format(t=state.t, s=movie.stub,
-         n=number)
+         n=data_num)
 
    # Generate and partition the figures
    plt.ioff()
@@ -240,13 +240,14 @@ def make_single_frame(state, movie, directory, number, state0=None):
 
    # Verify that the directory exists
    if movie.path is None:        # Default to directory
-      path = directory
+      path = data_dir
    elif movie.path[0] == "/":    # Absolute path specified
       path = movie.path
    else:                         # Relative path from directory
-      if directory[-1] != "/":
-         directory += "/"
-      path = directory + movie.path
+      if data_dir[-1] != "/":
+         path = data_dir + "/" + movie.path
+      else:
+         path = data_dir + movie.path
    if path[-1] != "/":           # Make sure there's a trailing "/"
       path += "/"
    path += "frames/"             # Subdirectory "frames"
@@ -257,8 +258,8 @@ def make_single_frame(state, movie, directory, number, state0=None):
          raise
 
    # Save the figures
-   image_file_name = "{p}{s}{n:06d}.{e}".format(p=path, s=movie.stub, n=number,
-         e=movie.image_type)
+   image_file_name = "{p}{s}{n:06d}.{e}".format(p=path, s=movie.stub,
+         n=data_num, e=movie.image_type)
    fig.savefig(image_file_name, bbox_inches="tight")
    fig.clear()
 
@@ -409,6 +410,8 @@ def panel_profile(state, movie, ax_prof, state0=None):
    # Draw lines marking the source layer
    ax_prof.axvline(x=-state.params.layer_width,color='black')
    ax_prof.axvline(x= state.params.layer_width,color='black')
+   ax_stdv.axvline(x=-state.params.layer_width,color='black')
+   ax_stdv.axvline(x= state.params.layer_width,color='black')
 
    # Construct the title
    ax_prof.set_title(" ".join((movie.variable, str(movie.mode))))

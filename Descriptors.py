@@ -125,6 +125,7 @@ class MovieLimits(object):
       """
       String representation.
       """
+      # TODO : How to handle one or both limits being None?  Also for __repr__
       return "[" + str(self.lo) + "," + str(self.hi) + "]"
 
 # End of MovieLimits class
