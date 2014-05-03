@@ -511,7 +511,7 @@ class MovieDescriptor(object):
       return True
 
    #===========================================================================
-   def frame_data(self, state, pad_bounds=0.0):
+   def frame_data_3D(self, state):
       """
       Compute the data for a single frame of the described movie.
 
@@ -523,13 +523,12 @@ class MovieDescriptor(object):
       lines: two can be processed from the 3D equivalent, one can be processed
       from the 3D equivalent of the base state, and three can be processed from
       the 3D equivalent of the initial state.  Thus to plot the profile, the
-      plotter will call frame_data three times with variations on the original
-      mode or with different states, and process the three resulting 3D arrays
-      into the six desired 1D lines that are plotted.
+      plotter will call frame_data_3D three times with variations on the
+      original mode or with different states, and process the three resulting
+      3D arrays into the six desired 1D lines that are plotted.
 
       Arguments:
          state (SimulationState) : the current state of the simulation
-         pad_bounds (float) : extra padding around value bounds
 
       Returns:
          variable (numpy.ndarray) : the masked data array
@@ -589,7 +588,8 @@ class MovieDescriptor(object):
       if self.mask_method == "explicit":
          var = np.ma.masked_where(cumulative_mask, var)
       elif self.mask_method == "force low":
-         if bounds_type in ["lower bound", "center"]:
+         if (self.mode.transform in ["perturbation", "contrast"] or
+               bounds_type in ["lower bound", "center"]):
             # The "force low" mask forces the data to the lowest value.  In a
             # general context, that is simply the minimum value of the data
             # array.  However, if we know that zero holds a special meaning, we
@@ -609,29 +609,7 @@ class MovieDescriptor(object):
       else:
          var[cumulative_mask] = self.mask_method
 
-      # Compute value limits
-      # TODO : This should be moved out of this function like collapsing to a
-      #        lower dimensionality.
-      if bounds_type == "lower bound":
-         vlo = 0.0
-         vhi = (1.0 + pad_bounds) * var.max()
-      elif bounds_type == "center":
-         vhi = (1.0 + 2.0*pad_bounds) * np.abs(var).max()
-         vlo = -vhi
-      elif bounds_type is None:
-         vlo = var.min()
-         vhi = var.max()
-         pad = pad_bounds * (vhi - vlo)
-         vhi += pad
-         vlo -= pad
-      else:
-         raise DescriptorError("bounds type", bounds_type, invalid=True)
-      if self.value_limits.lo is not None:
-         vlo = self.value_limits.lo
-      if self.value_limits.hi is not None:
-         vhi = self.value_limits.hi
-
-      return var, x, y, z, vlo, vhi
+      return var, x, y, z
 
    #===========================================================================
 
@@ -665,6 +643,7 @@ class MovieDescriptor(object):
          whatever arises from functions called by this routine
       """
 
+      # TODO : Handle parallel version of this for clean printing?
       print "Making frame {s}{n:06d} (t = {t}).".format(t=state.t, s=self.stub,
             n=data_num)
 
@@ -726,7 +705,7 @@ class MovieDescriptor(object):
       """
 
       # Get the data to be drawn
-      data, x, y, z, vlo, vhi = self.frame_data(state)
+      data, x, y, z = self.frame_data_3D(state)
 
       # Since we are drawing in 2D, reduce to the assumed geometry
       # --> Also, transform to the orientation expected by imshow
@@ -742,6 +721,25 @@ class MovieDescriptor(object):
       # Split the axes to have space for the colormap
       divider = make_axes_locatable(axes)
       cbar_axes = divider.append_axes("right", size="20%", pad=0.1)
+
+      # Compute value limits
+      bounds_type = state.known_variables[self.variable].zero
+      if self.mode.absolute or bounds_type == "lower bound":
+         vlo = 0.0
+         vhi = data.max()
+      elif (self.mode.transform in ["perturbation", "contrast"] or
+            bounds_type == "center"):
+         vhi = np.abs(data).max()
+         vlo = -vhi
+      elif bounds_type is None:
+         vlo = data.min()
+         vhi = data.max()
+      else:
+         raise DescriptorError("bounds type", bounds_type, invalid=True)
+      if self.value_limits.lo is not None:
+         vlo = self.value_limits.lo
+      if self.value_limits.hi is not None:
+         vhi = self.value_limits.hi
 
       # Draw the plot
       image = axes.imshow(plot_data,
@@ -793,16 +791,14 @@ class MovieDescriptor(object):
          whatever arises from functions called by this routine
       """
 
-      pad = 0.075
-
       # Get the data to be drawn
-      data, x, y, z, vlo, vhi = self.frame_data(state, pad_bounds=pad)
+      data, x, y, z = self.frame_data_3D(state)
       view = data.reshape((data.shape[0], data.shape[1]*data.shape[2]))
       mean = np.mean(view, axis=1)
       stdv = np.std(view, axis=1)
 
       if state0 is not None:
-         init, x2, y2, z2, vlo2, vhi2 = self.frame_data(state0)
+         init, x, y, z = self.frame_data_3D(state0)
          view = init.reshape((init.shape[0], init.shape[1]*init.shape[2]))
          std0 = np.std(view, axis=1)
          min0 = np.amin(view, axis=1)
@@ -814,7 +810,7 @@ class MovieDescriptor(object):
          self.mode.absolute = False
          self.mode.transform = "none"
          self.mode.reference = "base"
-         data, x2, y2, z2, vlo2, vhi2 = self.frame_data(state)
+         data, x, y, z = self.frame_data_3D(state)
          self.mode = original_mode  # Restore the original mode
          base = data[:,0,0]
       else:
@@ -864,16 +860,32 @@ class MovieDescriptor(object):
       ax_stdv.set_xlabel("position")
       ax_stdv.set_ylabel("standard deviation")
 
-      # Set the plotting limits
-      bounds_max = stdv.max()
-      if state0 is not None:
-         bounds_max = max(bounds_max, std0.max())
-      if bounds_max == 0.0:
-         bounds_max = 1.0
+      # Set the plotting limits (profiles panel)
+      #pad = 0.075
+      bounds_type = state.known_variables[self.variable].zero
+      if self.mode.absolute or bounds_type == "lower bound":
+         vlo = 0.0
+         vhi = data.max()
+      elif (self.mode.transform in ["perturbation", "contrast"] or
+            bounds_type == "center"):
+         vhi = np.abs(data).max()
+         vlo = -vhi
+      elif bounds_type is None:
+         vlo = data.min()
+         vhi = data.max()
       else:
-         bounds_max = (1.0 + pad) * bounds_max
-      ax_stdv.set_ylim([0.0, bounds_max])
+         raise DescriptorError("bounds type", bounds_type, invalid=True)
+      if self.value_limits.lo is not None:
+         vlo = self.value_limits.lo
+      if self.value_limits.hi is not None:
+         vhi = self.value_limits.hi
       ax_prof.set_ylim([vlo, vhi])
+
+      # Set the plotting limits (deviations panel)
+      vhi = stdv.max()
+      if vhi == 0.0:
+         vhi = 1.0
+      ax_stdv.set_ylim([0.0, vhi])
 
 # End of MovieDescriptor class
 #==============================================================================
