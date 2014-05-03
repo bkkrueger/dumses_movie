@@ -9,20 +9,14 @@ maker.
 
 # TODO : Develop an extensive testing suite
 
+# Python insists that __future__ import(s) should come first
 from __future__ import division
 
-#==============================================================================
-#------------------------------------------------------------------------------
-# Version 5 of DumPy is not normally in the path on this system, so it needs to
-# be explicitly added.  Because this is a for development as part of a local
-# test, DumPy_v05 is not set up site-wide, so using the site package and a PTH
-# file is not the best plan.  Thus I just use sys.path to add the location of
-# the test version of DumPy_v05.
-# TODO : take this out to test on other systems
-#import sys
-#sys.path.append("/Users/bkrueger/research/CCSNe/heating_layer/results/sample/dumses/visu")
-#------------------------------------------------------------------------------
-#==============================================================================
+# Load site_setup (if it exists) to handle any site-specific details
+try:
+   import site_setup
+except ImportError:
+   pass
 
 import argparse as ap
 import glob
