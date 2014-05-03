@@ -34,8 +34,15 @@ Attributes:
    ModeDescriptor (class) : description of the plotting mode of a variable
 """
 
+import copy
+import errno
 import math
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
+import os
 import warnings
 
 #------------------------------------------------------------------------------
@@ -603,6 +610,8 @@ class MovieDescriptor(object):
          var[cumulative_mask] = self.mask_method
 
       # Compute value limits
+      # TODO : This should be moved out of this function like collapsing to a
+      #        lower dimensionality.
       if bounds_type == "lower bound":
          vlo = 0.0
          vhi = (1.0 + pad_bounds) * var.max()
@@ -623,6 +632,248 @@ class MovieDescriptor(object):
          vhi = self.value_limits.hi
 
       return var, x, y, z, vlo, vhi
+
+   #===========================================================================
+
+   def draw_frame(self, state, data_dir, data_num, state0=None):
+      """
+      Draw a single frame of the movie
+
+      In order to be generic for future development, this will be a fairly
+      lightweight wrapper.  It creates a new figure, creates a subplot that
+      fills the figure, and passes the axes to a routine for plotting.  Future
+      development will allow multiple subplots, which would require extracting
+      multiple subplots and calling the appropriate drawing routines.
+
+      Note on file locations: If the path is absolute, the movie will be stored
+      there.  If the path is relative, it will be assumed to be relative to the
+      directory where the simulation data file is stored.  If the path is None,
+      the movie will be stored in the same directory where the simulation data
+      is found.  The frame images will be stored in a subdirectory called
+      "frames" relative to the directory where the movie will be stored.
+
+      Arguments:
+         state (SimulationState) : the current state of the simulation
+         data_dir (string) : the directory where the simulation data is stored
+         data_num (int) : the number of the current data file
+         state0 (SimulationState) : the initial state of the simulation
+
+      Returns:
+         None
+
+      Exceptions:
+         whatever arises from functions called by this routine
+      """
+
+      print "Making frame {s}{n:06d} (t = {t}).".format(t=state.t, s=self.stub,
+            n=data_num)
+
+      # Generate and partition the figures
+      plt.ioff()
+      fig = plt.figure()
+      ax1 = fig.add_axes([0, 0.05, 1, 0.9]) # left, bottom, width, height
+
+      # Fill the panels (Axes)
+      if self.mode.dimension == 1:
+         self.panel_profile(state, ax1, state0)
+      else:
+         self.panel_2D_pseudocolor(state, ax1)
+
+      # Verify that the directory exists
+      if self.path is None:        # Default to directory
+         frame_path = data_dir
+      elif self.path[0] == "/":    # Absolute path specified
+         frame_path = self.path
+      else:                         # Relative path from directory
+         if data_dir[-1] != "/":
+            frame_path = data_dir + "/" + self.path
+         else:
+            frame_path = data_dir + self.path
+      if frame_path[-1] != "/":           # Make sure there's a trailing "/"
+         frame_path += "/"
+      frame_path += "frames/"             # Subdirectory "frames"
+      try:
+         os.makedirs(frame_path)
+      except OSError as e:
+         if e.errno != errno.EEXIST:
+            raise
+
+      # Save the figures
+      image_file_name = "{p}{s}{n:06d}.{e}".format(p=frame_path, s=self.stub,
+            n=data_num, e=self.image_type)
+      fig.savefig(image_file_name, bbox_inches="tight")
+      fig.clear()
+
+   #===========================================================================
+
+   def panel_2D_pseudocolor(self, state, axes):
+      """
+      Draw a 2D pseudocolor plot as one panel of a figure.
+
+      This routine assumes that we are plotting a slice in the xy-plane at a
+      z-index of zero.  This comes from the structure of data in DUMSES for a
+      2D simulation, and can be modified later if I generate 3D data.
+
+      Arguments:
+         state (SimulationState) : the current state of the simulation
+         axes (matplotlib.axes.Axes) : the axes to draw the pseudocolor plot on
+
+      Returns:
+         None
+
+      Exceptions:
+         whatever arises from functions called by this routine
+      """
+
+      # Get the data to be drawn
+      data, x, y, z, vlo, vhi = self.frame_data(state)
+
+      # Since we are drawing in 2D, reduce to the assumed geometry
+      # --> Also, transform to the orientation expected by imshow
+      plot_data = np.flipud(data[:,:,0])
+      xx = y[0,:,0]
+      yy = x[:,0,0]
+      y_grid = np.abs(x[:,:,0].repeat(y.shape[1],1))
+
+      # Construct the desired colormap
+      my_cmap = copy.copy(cm.seismic)
+      my_cmap.set_bad(color="k", alpha=1)
+
+      # Split the axes to have space for the colormap
+      divider = make_axes_locatable(axes)
+      cbar_axes = divider.append_axes("right", size="20%", pad=0.1)
+
+      # Draw the plot
+      image = axes.imshow(plot_data,
+            extent=[xx.min(), xx.max(), yy.min(), yy.max()],
+            aspect=1.0, cmap=my_cmap, vmin=vlo, vmax=vhi)
+      axes.contour(xx, yy, y_grid, levels=[state.params.layer_width],
+            colors="#00FF00")
+      cbar = plt.colorbar(image, cax=cbar_axes)
+
+      # Construct the title
+      axes.set_title(" ".join((self.variable, str(self.mode))))
+
+      # Compute ticks (x, y, color)
+      ntickx = 6
+      nticky = int(round(ntickx * (yy.max()-yy.min()) / (xx.max()-xx.min())))
+      axes.xaxis.set_major_locator(MaxNLocator(ntickx))
+      axes.yaxis.set_major_locator(MaxNLocator(nticky))
+      cbar.locator = MaxNLocator(nbins=10)
+
+   #===========================================================================
+
+   def panel_profile(self, state, ax_prof, state0=None):
+      """
+      Draw the profiles as one panel of a figure.
+
+      This routine assumes that we are plotting a profile along the x-axis, and
+      computes the mean and standard deviation along that axis.
+
+      The figure is split into two panels:
+         the upper panel:
+            the mean state +/- the standard deviation
+            the unperturbed base state +/- the initial standard deviation
+            the initial maximum and minimum states
+         the lower panel:
+            the standard deviation
+            the initial standard deviation
+      The profiles derived from the initial state will not be plotted if None
+      is supplied for state0.
+
+      Arguments:
+         state (SimulationState) : the current state of the simulation
+         axes (matplotlib.axes.Axes) : the axes to draw the profile plot on
+         state0 (SimulationState) : the initial state of the simulation
+
+      Returns:
+         None
+
+      Exceptions:
+         whatever arises from functions called by this routine
+      """
+
+      pad = 0.075
+
+      # Get the data to be drawn
+      data, x, y, z, vlo, vhi = self.frame_data(state, pad_bounds=pad)
+      view = data.reshape((data.shape[0], data.shape[1]*data.shape[2]))
+      mean = np.mean(view, axis=1)
+      stdv = np.std(view, axis=1)
+
+      if state0 is not None:
+         init, x2, y2, z2, vlo2, vhi2 = self.frame_data(state0)
+         view = init.reshape((init.shape[0], init.shape[1]*init.shape[2]))
+         std0 = np.std(view, axis=1)
+         min0 = np.amin(view, axis=1)
+         max0 = np.amax(view, axis=1)
+
+      if self.mode.transform == "none":
+         original_mode = self.mode  # Save the mode so as to not muck it up
+         self.mode = copy.deepcopy(original_mode)  # Tweak a copy
+         self.mode.absolute = False
+         self.mode.transform = "none"
+         self.mode.reference = "base"
+         data, x2, y2, z2, vlo2, vhi2 = self.frame_data(state)
+         self.mode = original_mode  # Restore the original mode
+         base = data[:,0,0]
+      else:
+         base = np.zeros_like(mean)
+
+      x = x[:,0,0]
+
+      # Split the axes in half
+      divider = make_axes_locatable(ax_prof)
+      ax_stdv = divider.append_axes("bottom", size="40%", pad=0.1)
+
+      # TODO : If the data is a vertical or horizontal line (all x- or
+      #        y-coordinates are the same), then a warning appears.  Look into
+      #        whether or not that can be silenced elegantly without hiding
+      #        anything important.
+
+      # Draw the top plot
+      if state0 is not None:
+         ax_prof.plot(x, min0, lw=2, linestyle="dashed", color='grey')
+         ax_prof.plot(x, max0, lw=2, linestyle="dashed", color='grey')
+         ax_prof.fill_between(x, base-std0, base+std0,
+               facecolor='grey', alpha=0.5)
+      ax_prof.plot(x, base, lw=2, label="steady state", color='grey')
+      ax_prof.fill_between(x, mean-stdv, mean+stdv,
+            facecolor='blue', alpha=0.5)
+      ax_prof.plot(x, mean, lw=2, label="mean profile", color='blue')
+
+      # Draw the bottom plot
+      if state0 is not None:
+         ax_stdv.fill_between(x, std0, facecolor='grey', alpha=0.5)
+         ax_stdv.plot(x, std0, lw=2, color='grey')
+      ax_stdv.fill_between(x, stdv, facecolor='blue', alpha=0.5)
+      ax_stdv.plot(x, stdv, lw=2, label="standard deviation", color='blue')
+
+      # Draw lines marking the source layer
+      ax_prof.axvline(x=-state.params.layer_width,color='black')
+      ax_prof.axvline(x= state.params.layer_width,color='black')
+      ax_stdv.axvline(x=-state.params.layer_width,color='black')
+      ax_stdv.axvline(x= state.params.layer_width,color='black')
+
+      # Construct the title
+      ax_prof.set_title(" ".join((self.variable, str(self.mode))))
+
+      # Label axes and set ticks
+      plt.setp(ax_prof.get_xticklabels(), visible=False)
+      ax_prof.set_ylabel("profile")
+      ax_stdv.set_xlabel("position")
+      ax_stdv.set_ylabel("standard deviation")
+
+      # Set the plotting limits
+      bounds_max = stdv.max()
+      if state0 is not None:
+         bounds_max = max(bounds_max, std0.max())
+      if bounds_max == 0.0:
+         bounds_max = 1.0
+      else:
+         bounds_max = (1.0 + pad) * bounds_max
+      ax_stdv.set_ylim([0.0, bounds_max])
+      ax_prof.set_ylim([vlo, vhi])
 
 # End of MovieDescriptor class
 #==============================================================================
