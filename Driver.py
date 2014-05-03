@@ -91,7 +91,6 @@ if __name__ == "__main__":
    # Set up - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
    # Generate the list of DUMSES outputs to plot.
-   #output_list = sorted(glob.glob(args.directory + "output_*"))
    if ProcID == 0:
       full_list = sorted(glob.glob(args.directory + "output_*"))
       if NProcs > 1:
