@@ -865,14 +865,14 @@ class MovieDescriptor(object):
       bounds_type = state.known_variables[self.variable].zero
       if self.mode.absolute or bounds_type == "lower bound":
          vlo = 0.0
-         vhi = data.max()
+         vhi = (mean+stdv).max()
       elif (self.mode.transform in ["perturbation", "contrast"] or
             bounds_type == "center"):
-         vhi = np.abs(data).max()
+         vhi = max(np.abs(mean+stdv).max(), np.abs(mean-stdv).max())
          vlo = -vhi
       elif bounds_type is None:
-         vlo = data.min()
-         vhi = data.max()
+         vlo = (mean-stdv).min()
+         vhi = (mean+stdv).max()
       else:
          raise DescriptorError("bounds type", bounds_type, invalid=True)
       if self.value_limits.lo is not None:
