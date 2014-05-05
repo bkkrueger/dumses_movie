@@ -723,12 +723,20 @@ class MovieDescriptor(object):
       cbar_axes = divider.append_axes("right", size="20%", pad=0.1)
 
       # Compute value limits
-      bounds_type = state.known_variables[self.variable].zero
-      if self.mode.absolute or bounds_type == "lower bound":
+      if self.mode.absolute:
+         # Absolute value by definition means no negative numbers
+         bounds_type = "lower bound"
+      elif self.mode.transform in ["perturbation", "contrast"]:
+         # Non-absolute value perturbations/contrasts vary around zero
+         bounds_type = "center"
+      else:
+         # Otherwise, just use the variable's own default behavior
+         bounds_type = state.known_variables[self.variable].zero
+
+      if bounds_type == "lower bound":
          vlo = 0.0
          vhi = data.max()
-      elif (self.mode.transform in ["perturbation", "contrast"] or
-            bounds_type == "center"):
+      elif bounds_type == "center":
          vhi = np.abs(data).max()
          vlo = -vhi
       elif bounds_type is None:
@@ -862,12 +870,20 @@ class MovieDescriptor(object):
 
       # Set the plotting limits (profiles panel)
       #pad = 0.075
-      bounds_type = state.known_variables[self.variable].zero
-      if self.mode.absolute or bounds_type == "lower bound":
+      if self.mode.absolute:
+         # Absolute value by definition means no negative numbers
+         bounds_type = "lower bound"
+      elif self.mode.transform in ["perturbation", "contrast"]:
+         # Non-absolute value perturbations/contrasts vary around zero
+         bounds_type = "center"
+      else:
+         # Otherwise, just use the variable's own default behavior
+         bounds_type = state.known_variables[self.variable].zero
+
+      if bounds_type == "lower bound":
          vlo = 0.0
          vhi = (mean+stdv).max()
-      elif (self.mode.transform in ["perturbation", "contrast"] or
-            bounds_type == "center"):
+      elif bounds_type == "center":
          vhi = max(np.abs(mean+stdv).max(), np.abs(mean-stdv).max())
          vlo = -vhi
       elif bounds_type is None:
