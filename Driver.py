@@ -97,8 +97,8 @@ if __name__ == "__main__":
       if NProcs > 1:
          Nout = len(full_list)
          if NProcs > Nout:
-            msg = " ".join(("More processors than output files; processors"
-               "{0} through {1} will do no work.".format(NProcs, Nout-1)))
+            msg = " ".join(("More processors than output files; processors",
+               "{0} through {1} will do no work.".format(Nout, NProcs-1)))
             warnings.warn(msg, UserWarning)
          output_list = full_list[::NProcs]
          for i in xrange(1, min(NProcs,Nout)):
