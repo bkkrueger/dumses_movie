@@ -21,6 +21,7 @@ except ImportError:
 import argparse as ap
 import glob
 import tomlpython as toml
+import subprocess
 import sys
 import warnings
 
@@ -191,7 +192,9 @@ if __name__ == "__main__":
 
    # Encode the movies
    # TODO : For every movie that calls for this step, encode the individual
-   # frame images into a movie.
+   #        frame images into a movie.  Need to match the paths for movies and
+   #        frames that are used by the MovieDescriptor.  Also need to figure
+   #        out how to handle multiple data series.
 
    if NProcs > 1:
       pypar.barrier()

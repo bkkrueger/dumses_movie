@@ -628,6 +628,30 @@ class MovieDescriptor(object):
       return var, x, y, z
 
    #===========================================================================
+   def build_paths(self, data_dir):
+      """
+      Build the paths to the movie and frame directories.
+      """
+
+      if self.path is None:
+         # Default to directory
+         movie_path = data_dir
+      elif self.path[0] == "/":
+         # Absolute path specified --- use it
+         movie_path = self.path
+      else:
+         # Relative path from data_dir assumed
+         if data_dir[-1] != "/":
+            movie_path = data_dir + "/" + self.path
+         else:
+            movie_path = data_dir + self.path
+      if movie_path[-1] != "/":
+         movie_path += "/"
+      frame_path = movie_path + "frames/"
+
+      return movie_path, frame_path
+
+   #===========================================================================
 
    def draw_frame(self, state, data_dir, data_num, state0=None):
       """
@@ -671,18 +695,7 @@ class MovieDescriptor(object):
          self.panel_2D_pseudocolor(state, ax1)
 
       # Verify that the directory exists
-      if self.path is None:        # Default to directory
-         frame_path = data_dir
-      elif self.path[0] == "/":    # Absolute path specified
-         frame_path = self.path
-      else:                         # Relative path from directory
-         if data_dir[-1] != "/":
-            frame_path = data_dir + "/" + self.path
-         else:
-            frame_path = data_dir + self.path
-      if frame_path[-1] != "/":           # Make sure there's a trailing "/"
-         frame_path += "/"
-      frame_path += "frames/"             # Subdirectory "frames"
+      movie_path, frame_path = self.build_paths(data_dir)
       try:
          os.makedirs(frame_path)
       except OSError as e:
