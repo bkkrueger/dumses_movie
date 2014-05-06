@@ -329,6 +329,7 @@ class MovieDescriptor(object):
       final_pause (int) : the number of extra copies of the final frame
       masks (list of MaskDescriptors) : the masks to be applied (if any)
       mask_method (string) : how to apply the masks
+      xlines (list of floats) : list of x-positions to mark with lines
    """
 
    #===========================================================================
@@ -478,6 +479,8 @@ class MovieDescriptor(object):
          except ValueError:
             raise DescriptorError("mask method", mask_method, invalid=True)
 
+      xlines = list(float(x) for x in dictionary.get("xlines", []))
+
       # Now that all the values have been verified, save them
       self.stub = stub
       self.path = path
@@ -493,12 +496,16 @@ class MovieDescriptor(object):
       self.final_pause = final_pause
       self.masks = masks
       self.mask_method = mask_method
+      self.xlines = xlines
 
    #===========================================================================
    def within_time_limits(self, time):
       """
       Check if the given time is within the specified time limits.
       """
+
+      # TODO : It may make more sense for the MovieLimits class to be able to
+      #        evaluate this as a class method.
 
       if self.time_limits.lo is not None:
          if time < self.time_limits.lo:
@@ -712,7 +719,6 @@ class MovieDescriptor(object):
       plot_data = np.flipud(data[:,:,0])
       xx = y[0,:,0]
       yy = x[:,0,0]
-      y_grid = np.abs(x[:,:,0].repeat(y.shape[1],1))
 
       # Construct the desired colormap
       my_cmap = copy.copy(cm.seismic)
@@ -750,11 +756,26 @@ class MovieDescriptor(object):
          vhi = self.value_limits.hi
 
       # Draw the plot
+      # TODO : Sort out the color scheme.
+      #        Green shows up poorly against white but well against blue and
+      #        okay against red.  Consider the chart here:
+      #        http://webdesign.about.com/od/color/l/bl_contrast_table.htm
+      #        and note that none of the colors shown contrasts well with blue,
+      #        red, and white.  A better idea may be to change the colormap for
+      #        the pseudocolor plot.  For example, yellow and white both
+      #        contrast well with red, blue, grey, and black, so replacing
+      #        white with either grey or black and changing the lines to either
+      #        yellow or white could work.
       image = axes.imshow(plot_data,
             extent=[xx.min(), xx.max(), yy.min(), yy.max()],
             aspect=1.0, cmap=my_cmap, vmin=vlo, vmax=vhi)
-      axes.contour(xx, yy, y_grid, levels=[state.params.layer_width],
-            colors="#00FF00")
+      axes.contour(xx, yy, x[:,:,0].repeat(y.shape[1],1),
+            levels=state.params.layer_width*np.array((-1.0, 1.0)),
+            colors="#00FF00", linestyles="solid")
+      if len(self.xlines) > 0:
+         axes.contour(xx, yy, x[:,:,0].repeat(y.shape[1],1),
+               levels=self.xlines, colors="#00FF00",
+               linestyles="dashed")
       cbar = plt.colorbar(image, cax=cbar_axes)
 
       # Construct the title
@@ -854,10 +875,15 @@ class MovieDescriptor(object):
       ax_stdv.plot(x, stdv, lw=2, label="standard deviation", color='blue')
 
       # Draw lines marking the source layer
-      ax_prof.axvline(x=-state.params.layer_width,color='black')
-      ax_prof.axvline(x= state.params.layer_width,color='black')
-      ax_stdv.axvline(x=-state.params.layer_width,color='black')
-      ax_stdv.axvline(x= state.params.layer_width,color='black')
+      ax_prof.axvline(x=-state.params.layer_width, color='black')
+      ax_prof.axvline(x= state.params.layer_width, color='black')
+      ax_stdv.axvline(x=-state.params.layer_width, color='black')
+      ax_stdv.axvline(x= state.params.layer_width, color='black')
+
+      # Draw other lines
+      for ax in [ax_prof, ax_stdv]:
+         for xpos in self.xlines:
+            ax.axvline(x=xpos, color="black", linestyle="--")
 
       # Construct the title
       ax_prof.set_title(" ".join((self.variable, str(self.mode))))

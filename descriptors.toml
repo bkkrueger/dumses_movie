@@ -10,6 +10,7 @@
    fps = 12
    image_type = 'png'
    movie_type = 'avi'
+   xlines = [-0.5, 0.5]
 
 [movies.entr]
    stub = 'entr_'
@@ -44,6 +45,7 @@
    movie_type = "avi"
    fps = 20
    final_pause = "0.35s"
+   xlines = [-0.5, 0.0, 0.5]
 
 [movies.profile2]
    stub = "prof2_"
