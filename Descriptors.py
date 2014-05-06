@@ -126,14 +126,46 @@ class MovieLimits(object):
       """
       String representation.
       """
-      return "Limits: [" + str(self.lo) + "," + str(self.hi) + "]"
+      if self.lo is None:
+         lo = "*"
+      else:
+         lo = self.lo
+      if self.hi is None:
+         hi = "*"
+      else:
+         hi = self.hi
+      return "Limits: [{l},{h}]".format(l=lo, h=hi)
 
    def __str__(self):
       """
       String representation.
       """
-      # TODO : How to handle one or both limits being None?  Also for __repr__
-      return "[" + str(self.lo) + "," + str(self.hi) + "]"
+      if self.lo is None:
+         lo = "*"
+      else:
+         lo = self.lo
+      if self.hi is None:
+         hi = "*"
+      else:
+         hi = self.hi
+      return "[{l},{h}]".format(l=lo, h=hi)
+
+   def test(self, a):
+      """
+      Test whether the supplied argument is in the limits.
+
+      Note: This may be called with a scalar or a NumPy array.  Using NumPy's
+      ones_like and logical_and handles both cases.
+      """
+      if self.lo is None:
+         lo = np.ones_like(a, dtype=bool)
+      else:
+         lo = (self.lo <= a)
+      if self.hi is None:
+         hi = np.ones_like(a, dtype=bool)
+      else:
+         hi = (a <= self.hi)
+      return np.logical_and(lo, hi)
 
 # End of MovieLimits class
 #==============================================================================
@@ -315,6 +347,7 @@ class MovieDescriptor(object):
    frames into a movie.
 
    Attributes:
+      title (string) : title to print on top of frames (or None for default)
       stub (string) : the stub of the output files (images and movie)
       path (string) : the path to where the movie will be saved
       image_type (string) : the extension for the image files
@@ -392,6 +425,7 @@ class MovieDescriptor(object):
          else:
             return float(x)
 
+      title = dictionary.get("title", None)
       stub = dictionary["stub"]
       path = dictionary["path"]
       image_type = dictionary["image_type"]
@@ -482,6 +516,7 @@ class MovieDescriptor(object):
       xlines = list(float(x) for x in dictionary.get("xlines", []))
 
       # Now that all the values have been verified, save them
+      self.title = title
       self.stub = stub
       self.path = path
       self.image_type = image_type
@@ -497,25 +532,6 @@ class MovieDescriptor(object):
       self.masks = masks
       self.mask_method = mask_method
       self.xlines = xlines
-
-   #===========================================================================
-   def within_time_limits(self, time):
-      """
-      Check if the given time is within the specified time limits.
-      """
-
-      # TODO : It may make more sense for the MovieLimits class to be able to
-      #        evaluate this as a class method.
-
-      if self.time_limits.lo is not None:
-         if time < self.time_limits.lo:
-            return False
-
-      if self.time_limits.hi is not None:
-         if time > self.time_limits.hi:
-            return False
-
-      return True
 
    #===========================================================================
    def frame_data_3D(self, state):
@@ -554,34 +570,23 @@ class MovieDescriptor(object):
 
       # Apply the limits from the MovieWindow
       x = state.x[:,0,0]
-      idx = np.ones_like(x, dtype=bool)
-      if self.window.x.lo is not None:
-         idx = np.logical_and(idx, x >= self.window.x.lo)
-      if self.window.x.hi is not None:
-         idx = np.logical_and(idx, x <= self.window.x.hi)
-      var = var[idx,:,:]
-      x = x[idx]
+      x_idx = self.window.x.test(x)
+      x = x[x_idx]
       x = x.reshape((len(x),1,1))
 
       y = state.y[0,:,0]
-      idx = np.ones_like(y, dtype=bool)
-      if self.window.y.lo is not None:
-         idx = np.logical_and(idx, y >= self.window.y.lo)
-      if self.window.y.hi is not None:
-         idx = np.logical_and(idx, y <= self.window.y.hi)
-      var = var[:,idx,:]
-      y = y[idx]
+      y_idx = self.window.y.test(y)
+      y = y[y_idx]
       y = y.reshape((1,len(y),1))
 
       z = state.z[0,0,:]
-      idx = np.ones_like(z, dtype=bool)
-      if self.window.z.lo is not None:
-         idx = np.logical_and(idx, z >= self.window.z.lo)
-      if self.window.z.hi is not None:
-         idx = np.logical_and(idx, z <= self.window.z.hi)
-      var = var[:,:,idx]
-      z = z[idx]
+      z_idx = self.window.z.test(z)
+      z = z[z_idx]
       z = z.reshape((1,1,len(z)))
+
+      var = var[x_idx,:,:]
+      var = var[:,y_idx,:]
+      var = var[:,:,z_idx]
 
       # Get the bounds type (may be used in masking)
       bounds_type = state.known_variables[self.variable].zero
@@ -589,7 +594,11 @@ class MovieDescriptor(object):
       # Construct the overall mask (union of all masks)
       cumulative_mask = np.zeros_like(var, dtype=bool)
       for mask in self.masks:
-         cumulative_mask = np.logical_or(cumulative_mask, mask.apply(state))
+         tmp = mask.apply(state)
+         tmp = tmp[x_idx,:,:]
+         tmp = tmp[:,y_idx,:]
+         tmp = tmp[:,:,z_idx]
+         cumulative_mask = np.logical_or(cumulative_mask, tmp)
 
       # Apply the mask
       if self.mask_method == "explicit":
@@ -649,10 +658,6 @@ class MovieDescriptor(object):
       Exceptions:
          whatever arises from functions called by this routine
       """
-
-      # TODO : Handle parallel version of this for clean printing?
-      print "Making frame {s}{n:06d} (t = {t}).".format(t=state.t, s=self.stub,
-            n=data_num)
 
       # Generate and partition the figures
       plt.ioff()
@@ -779,7 +784,10 @@ class MovieDescriptor(object):
       cbar = plt.colorbar(image, cax=cbar_axes)
 
       # Construct the title
-      axes.set_title(" ".join((self.variable, str(self.mode))))
+      if self.title is None:
+         axes.set_title(" ".join((self.variable, str(self.mode))))
+      else:
+         axes.set_title(self.title)
 
       # Compute ticks (x, y, color)
       ntickx = 6
@@ -851,11 +859,6 @@ class MovieDescriptor(object):
       divider = make_axes_locatable(ax_prof)
       ax_stdv = divider.append_axes("bottom", size="40%", pad=0.1)
 
-      # TODO : If the data is a vertical or horizontal line (all x- or
-      #        y-coordinates are the same), then a warning appears.  Look into
-      #        whether or not that can be silenced elegantly without hiding
-      #        anything important.
-
       # Draw the top plot
       if state0 is not None:
          ax_prof.plot(x, min0, lw=2, linestyle="dashed", color='grey')
@@ -886,7 +889,10 @@ class MovieDescriptor(object):
             ax.axvline(x=xpos, color="black", linestyle="--")
 
       # Construct the title
-      ax_prof.set_title(" ".join((self.variable, str(self.mode))))
+      if self.title is None:
+         ax_prof.set_title(" ".join((self.variable, str(self.mode))))
+      else:
+         ax_prof.set_title(self.title)
 
       # Label axes and set ticks
       plt.setp(ax_prof.get_xticklabels(), visible=False)

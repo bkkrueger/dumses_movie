@@ -1,25 +1,10 @@
 """
 Make the frames.
 
-This module manages the loops and control logic for making the frames.  It is
-generally entered through the make_all_frames routine, which takes a list of
-DUMSES output file names and a list of MovieDescriptors, then loops as
-appropriate to make the frames.  It can also be entered one level farther down,
-to the make_single_frame routine (which is called by the make_all_frames
-loops), which takes the name of a single DUMSES output and a single
-MovieDescriptor, then draws the appropriate frame.  The make_single_frame
-routine uses several support routines to draw the panels for each image.  The
-panel_2D_pseudocolor routine takes a state, movie description, and axes, and
-draws a two-dimensional psuedocolor plot  on the axes using the data in the
-state and the description of the movie.  The panel_profile function is
-analogous, but draws a one-dimensional profile (along the x axis due to its
-special nature).
+This module manages the loops and control logic for making the frames.
 
 Attributes:
    make_all_frames : makes all frames for lists of outputs and movies
-   make_single_frame : makes a single frame for a given output and movie
-   panel_2D_pseudocolor : draws a 2D pseudocolor plot on a given axes
-   panel_panel : draws a 1D profile plot on a given axes
 """
 
 # TODO : Idea: Allow specification of colorbar limits as function of time.
@@ -40,6 +25,7 @@ from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import os
+import sys
 import warnings
 
 from dumpy_v05.data.rd_dumses import DumsesData
@@ -107,8 +93,7 @@ def make_all_frames(data_list, movie_list):
 
    # If needed, save the initial state for the current series
    state0 = None
-   if profile_mode:
-      series_name = None
+   series_name = None
 
    # Master loop - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -177,10 +162,11 @@ def make_all_frames(data_list, movie_list):
       # Loop over all the movies
       for movie in movie_list.values():
          # Only make frames in the time range
-         if movie.within_time_limits(state.t):
+         if movie.time_limits.test(state.t):
+            sys.stdout.write("Making frame {s}{n:06d} (t = {t}).\n".format(
+                  t=state.t, s=movie.stub, n=number))
             try:
                movie.draw_frame(state, path, number, state0)
-               #make_single_frame(state, movie, path, number, state0)
             except (Desc.DescriptorError, SD.SimulationError) as err:
                # Well that didn't work... guess we'll move on
                msg = "".join(("While generating movie ", str(movie),
@@ -188,6 +174,9 @@ def make_all_frames(data_list, movie_list):
                   ", the following error occurred:\n   ", str(err),
                   "\nThis frame will not be drawn."))
                warnings.warn(msg, UserWarning)
+         else:
+            sys.stdout.write("Skipping frame {s}{n:06d} (t = {t}).\n".format(
+                  t=state.t, s=movie.stub, n=number))
 
 #==============================================================================
 
