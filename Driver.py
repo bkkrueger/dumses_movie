@@ -21,6 +21,7 @@ except ImportError:
 import argparse as ap
 import glob
 import tomlpython as toml
+import sys
 import warnings
 
 import Descriptors as Desc
@@ -170,6 +171,7 @@ if __name__ == "__main__":
       for name, movie in sorted(movies.items()):
          print "   {0}:".format(name), movie
       print "="*79
+      sys.stdout.flush()
 
    # Summarize outputs list
    if NProcs > 1:
@@ -180,6 +182,7 @@ if __name__ == "__main__":
                n=len(output_list))
          for o in output_list:
             print "    {0}".format(o)
+         sys.stdout.flush()
       if NProcs > 1:
          pypar.barrier()
 
