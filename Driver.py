@@ -94,12 +94,14 @@ if __name__ == "__main__":
    if ProcID == 0:
       full_list = sorted(glob.glob(args.directory + "output_*"))
       if NProcs > 1:
-         ihi = len(full_list) // NProcs
-         output_list = full_list[:ihi]
-         for i in xrange(1, NProcs):
-            ilo = len(full_list) * i // NProcs
-            ihi = len(full_list) * (i+1) // NProcs
-            pypar.send(full_list[ilo:ihi], destination=i)
+         Nout = len(full_list)
+         if NProcs > Nout:
+            msg = " ".join(("More processors than output files; processors"
+               "{0} through {1} will do no work.".format(NProcs, Nout-1)))
+            warnings.warn(msg, UserWarning)
+         output_list = full_list[::NProcs]
+         for i in xrange(1, min(NProcs,Nout)):
+            pypar.send(full_list[i::NProcs], destination=i)
       else:
          output_list = full_list
    else:

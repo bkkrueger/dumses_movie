@@ -85,3 +85,11 @@
    fps = 20
    final_pause = "0.35s"
 
+[movies.profile6]
+   stub = "prof6_"
+   path = "movies/test"
+   variable = "pressure"
+   mode = "profile: contrast"
+   image_type = "png"
+   make_movie = false
+
