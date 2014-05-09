@@ -36,7 +36,7 @@ import SimulationData as SD
 
 def make_all_frames(data_list, movie_list):
    """
-   Makes all the frames based on a list of data sources and a list of movies.
+   Makes all frames based on lists of data sources and of movies.
 
    Arguments:
       data_list (list of strings) : list of filenames of DUMSES outputs

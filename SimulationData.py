@@ -1,29 +1,23 @@
 """
 Specification of simulation descriptions
 
-The SimulationError object describes errors that arise from classes defined
-here.  This allows calling routines to distinguish errors from this body of
-code from other, more generic errors.
+The SimulationError object describes errors that arise from classes
+defined here.  This allows calling routines to distinguish errors from
+this body of code from other, more generic errors.
 
 The SimulationInput object describes the setup of the simulation.  This
-includes parameters such as the upstream conditions used to construct the
-initial state, the adiabatic index for the equation of state, and the
-description of the sources.
+includes parameters such as the upstream conditions used to construct
+the initial state, the adiabatic index for the equation of state, and
+the description of the sources.
 
-The SimulationVariable object describes a variable that can be extracted from
-the data.  This includes a function to compute the variable, the default name
-of the variable, and how the variable relates to zero ("lower bound", "center",
-or None).
+The SimulationVariable object describes a variable that can be
+extracted from the data.  This includes a function to compute the
+variable, the default name of the variable, and how the variable
+relates to zero ("lower bound", "center", or None).
 
-The SimulationState object packages the data from the current state of a
-simulation.  It also provides a mechanism for extracting a number of different
-quantities in a convenient way.
-
-Attributes:
-   SimulationError (class) : an error that occurred in a class defined here
-   SimulationInput (class) : a description of the simulation
-   SimulationVariable (class) : a description of a variable
-   SimulationState (class) : a description of one state of the simulation
+The SimulationState object packages the data from the current state of
+a simulation.  It also provides a mechanism for extracting a number of
+different quantities in a convenient way.
 """
 
 import numpy as np
@@ -50,20 +44,29 @@ class SimulationInput(object):
    """
    A description of the simulation.
 
-   This class describes the simulation based on the values extracted from the
-   inputs file.  It includes methods to initialize from a file and to construct
-   the source functions.
+   This class describes the simulation based on the values extracted
+   from the inputs file.  It includes methods to initialize from a file
+   and to construct the source functions.
 
-   Some attributes are carried for computation purposes (such as _heat_coef and
-   _grav_coef), while others for informational purposes (such as _Kheat and
-   _Kgrav).  Only the necessary attributes are "public", while the others are
-   "hidden".
+   Some attributes are carried for computation purposes (such as
+   _heat_coef and _grav_coef, to avoid constantly recalculating them),
+   while others for informational purposes (such as _Kheat and _Kgrav, which
+   are useful for summarizing the information stored).  Only the
+   necessary attributes are "public", while the others are "hidden";
+   this is to suggest to the user that they not mess with more
+   attributes than necessary, because some of these quantities are
+   interdependent and changing one would require changing several other
+   quantities in order to maintain, e.g., thermodynamic consistency.
+   Property decorators could be used in order to maintain such
+   consistency conditions, but changing only one quantity does not
+   clearly define which other quantities should change or how they
+   should change.
 
    Attributes:
-      __initialized (bool) : flag to specify whether the object is initialized
+      __initialized (bool) : is the object is initialized
       gamma (float) : adiabatic index
-      pres_up (float) : scaling value for pressure (used especially in entropy)
-      dens_up (float) : scaling value for density (used especially in entropy)
+      pres_up (float) : scaling value for pressure
+      dens_up (float) : scaling value for density
       _csnd_up (float) : scaling value for sound speed
       _mach_up (float) : scaling value for Mach number
       layer_width (float) : width parameter for source layer
@@ -148,7 +151,7 @@ class SimulationInput(object):
       Initialize the class from an inputs file.
 
       Arguments:
-         inputs_file_name (string) : the name of the inputs file to parse
+         inputs_file_name (string) : name of the inputs file to parse
 
       Returns:
          None
@@ -262,7 +265,7 @@ class SimulationInput(object):
       XX = np.abs(x / self.layer_width)
 
       if self._shape == 'trapezoid':
-         f = np.maximum(0.0, np.minimum(2.0 * (1.0 - XX), 1.0))
+         f = np.clip(2.0 * (1.0 - XX), 0.0, 1.0)
       elif self._shape == 'square':
          f = np.zeros_like(x)
          f[XX <= 1.0] = 1.0
@@ -303,7 +306,7 @@ class SimulationInput(object):
    #===========================================================================
    def heating(self, x, y, z, density):
       """
-      Compute the heating rate (source for total energy density per time).
+      Compute the heating rate (total energy density per time source).
 
       Arguments:
          x (numpy.ndarray) : the x coordinates
@@ -335,23 +338,24 @@ class SimulationInput(object):
 #==============================================================================
 class SimulationVariable(object):
    """
-   A variable, including a function to compute it and how it relates to zero.
+   A variable that may be computed from the simulation data.
 
    The SimulationState "knows" a collection of variables.  To "know" a
-   variable, it must have one or more names (SimulationState maintains a
-   complete list, including aliases, although although SimulationVariable will
-   hold a default name) and two attributes (held by SimulationVariable): a
-   function to compute the variable and a parameter describing how the variable
-   relates to zero (generally one of "lower bound", "center", or None).
-   SimulationState is the object that knows the variables, and
-   SimulationVariable is only a convenience object to package that information
-   together.  Thus the SimulationVariable object is mostly dummy information
-   that will be filled in by the SimulationState when it generates its
-   collection of known variables.
+   variable, it must have one or more names (SimulationState maintains
+   a complete list, including aliases, although although
+   SimulationVariable will hold a default name) and two attributes
+   (held by SimulationVariable): a function to compute the variable and
+   a parameter describing how the variable relates to zero (generally
+   one of "lower bound", "center", or None).  SimulationState is the
+   object that knows the variables, and SimulationVariable is only a
+   convenience object to package that information together.  Thus the
+   SimulationVariable object is mostly dummy information that will be
+   filled in by the SimulationState when it generates its collection of
+   known variables.
 
    Attributes:
       name (str) : the name of the variable
-      zero (str) : how the variable relates to the "special" value of zero
+      zero (str) : how the variable relates to zero
    """
 
    #===========================================================================
@@ -387,24 +391,25 @@ class SimulationVariable(object):
 #==============================================================================
 class SimulationState(object):
    """
-   The current state of a simulation, with methods to extract quantities.
+   The current state of a simulation.
 
-   This class stores the current state of a simulation, which includes the full
-   and base states of mass density, momentum density, total energy density, as
-   well as the time and the coordinate axes.  This much is similar to the
-   DumsesData class, to which this is closely related (and a method exists to
-   construct the SimulationState from a DumsesData because of this close
-   relation).  The primary difference is that the SimulationState will also
-   have a routine that accepts the name of a variable and the name of a state
-   (full state or base state), which will use private methods to compute the
-   desired variable in the specified state.  Having a separate class also
-   allows me to tweak the internals to fit my needs without changing the
-   standard DumsesData class (e.g. the names of variables, or if I find time to
-   update this to be parallel so that I can visualize large simulations that
-   would fill the memory on a single core).
+   This class stores the current state of a simulation, which includes
+   the full and base states of mass density, momentum density, total
+   energy density, as well as the time and the coordinate axes.  This
+   much is similar to the DumsesData class, to which this is closely
+   related (and a method exists to construct the SimulationState from a
+   DumsesData because of this close relation).  The primary difference
+   is that the SimulationState will also have a routine that accepts
+   the name of a variable and the name of a state (full state or base
+   state), which will use private methods to compute the desired
+   variable in the specified state.  Having a separate class also
+   allows me to tweak the internals to fit my needs without changing
+   the standard DumsesData class (e.g. the names of variables, or if I
+   find time to update this to be parallel so that I can visualize
+   large simulations that would fill the memory on a single core).
 
    Attributes:
-      __initialized (bool) : flag stating if instance has been initialized
+      __initialized (bool) : is the object initialized
       _dens (numpy.ndarray) : mass density full state array
       _momv (numpy.ndarray) : momentum density full state array
       _Ener (numpy.ndarray) : total energy density full state array
@@ -416,7 +421,7 @@ class SimulationState(object):
       z (numpy.ndarray) : z coordinates array
       t (float) : time
       params (SimulationInputs) : important parameters from inputs file
-      known_variables (list of SimulationVariables) : list of known variables
+      known_variables (list) : list of known variables
    """
 
    #===========================================================================
@@ -637,8 +642,8 @@ class SimulationState(object):
       Construct the SimulationState from the supplied information.
 
       Arguments:
-         dumpy (DumsesData) : to be used as a basis to construct this object
-         input_parameters (SimulationInputs) : parameters from inputs file
+         dumpy (DumsesData) : used as a basis to construct this object
+         input_parameters (SimulationInputs) : input file parameters
 
       Returns:
          None
@@ -652,25 +657,25 @@ class SimulationState(object):
 
       t = dumpy.time
 
-      x = dumpy.x.reshape((len(dumpy.x),1,1))
-      y = dumpy.y.reshape((1,len(dumpy.y),1))
-      z = dumpy.z.reshape((1,1,len(dumpy.z)))
+      x = dumpy.x[:,None,None]
+      y = dumpy.y[None,:,None]
+      z = dumpy.z[None,None,:]
 
       dens = dumpy.rho
       momv = dumpy.rhou
       Ener = dumpy.E
 
-      temp = dumpy.rho0.reshape((len(dumpy.x),1,1))
+      temp = dumpy.rho0[:,None,None]
       temp = temp.repeat(len(dumpy.y), axis=1)
       temp = temp.repeat(len(dumpy.z), axis=2)
       dens0 = temp
 
-      temp = dumpy.rhou0.reshape((len(dumpy.x),1,1))
+      temp = dumpy.rhou0[:,None,None]
       temp = temp.repeat(len(dumpy.y), axis=1)
       temp = temp.repeat(len(dumpy.z), axis=2)
       momv0 = temp
 
-      temp = dumpy.E0.reshape((len(dumpy.x),1,1))
+      temp = dumpy.E0[:,None,None]
       temp = temp.repeat(len(dumpy.y), axis=1)
       temp = temp.repeat(len(dumpy.z), axis=2)
       Ener0 = temp
@@ -697,17 +702,17 @@ class SimulationState(object):
    #===========================================================================
    def extract(self, variable_name, use_full_state=True):
       """
-      Extract the desired variable in the desired mode.
+      Extract the desired variable.
 
       Arguments:
          variable_name (string) : name of the variable to be extracted
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
 
       Returns:
          array holding the data for the requested variable
 
       Exceptions:
-         SimulationError flagging an uninitialized object or unknown variable
+         SimulationError for uninitialized object or unknown variable
       """
 
       if not self.__initialized:
@@ -731,14 +736,14 @@ class SimulationState(object):
       """
       The derivative of quantity q with respect to x.
 
-      NOTE: I assume that the boundary conditions in the x direction are
-      zero-gradient.  I could write this to be flexible by having the
-      SimulationInputs class parse the bval_in and bval_out entries in the
-      inputs file, but if a user-defined boundary value is used then there is
-      no way to know what to do.  Thus I will for now simply be lazy and assume
-      the boundary conditions that I use in all of my own simulations and leave
-      it to other users to read the documentation and adjust accordingly for
-      their own uses.
+      NOTE: I assume that the boundary conditions in the x direction
+      are zero-gradient.  I could write this to be flexible by having
+      the SimulationInputs class parse the bval_in and bval_out entries
+      in the inputs file, but if a user-defined boundary value is used
+      then there is no way to know what to do.  Thus I will for now
+      simply be lazy and assume the boundary conditions that I use in
+      all of my own simulations and leave it to other users to read the
+      documentation and adjust accordingly for their own uses.
 
       Arguments:
          q (numpy.ndarray) : the quantity to be differentiated
@@ -761,14 +766,14 @@ class SimulationState(object):
       """
       The derivative of quantity q with respect to y.
 
-      NOTE: I assume that the boundary conditions in the y direction are
-      periodic.  I could write this to be flexible by having the
-      SimulationInputs class parse the bval_in and bval_out entries in the
-      inputs file, but if a user-defined boundary value is used then there is
-      no way to know what to do.  Thus I will for now simply be lazy and assume
-      the boundary conditions that I use in all of my own simulations and leave
-      it to other users to read the documentation and adjust accordingly for
-      their own uses.
+      NOTE: I assume that the boundary conditions in the y direction
+      are periodic.  I could write this to be flexible by having the
+      SimulationInputs class parse the bval_in and bval_out entries in
+      the inputs file, but if a user-defined boundary value is used
+      then there is no way to know what to do.  Thus I will for now
+      simply be lazy and assume the boundary conditions that I use in
+      all of my own simulations and leave it to other users to read the
+      documentation and adjust accordingly for their own uses.
 
       Arguments:
          q (numpy.ndarray) : the quantity to be differentiated
@@ -793,14 +798,14 @@ class SimulationState(object):
       """
       The derivative of quantity q with respect to z.
 
-      NOTE: I assume that the boundary conditions in the z direction are
-      periodic.  I could write this to be flexible by having the
-      SimulationInputs class parse the bval_in and bval_out entries in the
-      inputs file, but if a user-defined boundary value is used then there is
-      no way to know what to do.  Thus I will for now simply be lazy and assume
-      the boundary conditions that I use in all of my own simulations and leave
-      it to other users to read the documentation and adjust accordingly for
-      their own uses.
+      NOTE: I assume that the boundary conditions in the z direction
+      are periodic.  I could write this to be flexible by having the
+      SimulationInputs class parse the bval_in and bval_out entries in
+      the inputs file, but if a user-defined boundary value is used
+      then there is no way to know what to do.  Thus I will for now
+      simply be lazy and assume the boundary conditions that I use in
+      all of my own simulations and leave it to other users to read the
+      documentation and adjust accordingly for their own uses.
 
       Arguments:
          q (numpy.ndarray) : the quantity to be differentiated
@@ -823,10 +828,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_density(self, use_full_state):
       """
-      Extract the density in the desired mode.
+      Extract the density.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       if use_full_state:
@@ -837,10 +842,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_x_momentum(self, use_full_state):
       """
-      Extract the x-momentum in the desired mode.
+      Extract the x-momentum.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       if use_full_state:
@@ -851,10 +856,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_y_momentum(self, use_full_state):
       """
-      Extract the y-momentum in the desired mode.
+      Extract the y-momentum.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       if use_full_state:
@@ -865,10 +870,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_z_momentum(self, use_full_state):
       """
-      Extract the z-momentum in the desired mode.
+      Extract the z-momentum.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       if use_full_state:
@@ -879,10 +884,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_momentum_magnitude(self, use_full_state):
       """
-      Extract the magnitude of the momentum in the desired mode.
+      Extract the magnitude of the momentum.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       if use_full_state:
@@ -893,10 +898,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_x_velocity(self, use_full_state):
       """
-      Extract the x-velocity in the desired mode.
+      Extract the x-velocity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_x_momentum(use_full_state) / \
@@ -905,10 +910,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_y_velocity(self, use_full_state):
       """
-      Extract the y-velocity in the desired mode.
+      Extract the y-velocity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_y_momentum(use_full_state) / \
@@ -917,10 +922,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_z_velocity(self, use_full_state):
       """
-      Extract the z-velocity in the desired mode.
+      Extract the z-velocity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_z_momentum(use_full_state) / \
@@ -929,10 +934,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_velocity_magnitude(self, use_full_state):
       """
-      Extract the magnitude of the velocity in the desired mode.
+      Extract the magnitude of the velocity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_momentum_magnitude(use_full_state) / \
@@ -941,10 +946,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_x_vorticity(self, use_full_state):
       """
-      Extract the x-vorticity in the desired mode.
+      Extract the x-vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       vely = self._func_y_velocity(use_full_state)
@@ -955,10 +960,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_y_vorticity(self, use_full_state):
       """
-      Extract the y-vorticity in the desired mode.
+      Extract the y-vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       velx = self._func_x_velocity(use_full_state)
@@ -969,10 +974,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_z_vorticity(self, use_full_state):
       """
-      Extract the z-vorticity in the desired mode.
+      Extract the z-vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       velx = self._func_x_velocity(use_full_state)
@@ -983,10 +988,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_vorticity_magnitude(self, use_full_state):
       """
-      Extract the magnitude of the vorticity in the desired mode.
+      Extract the magnitude of the vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       vrtx = self._func_x_vorticity(use_full_state)
@@ -998,10 +1003,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_x_specific_vorticity(self, use_full_state):
       """
-      Extract the specific x-vorticity in the desired mode.
+      Extract the specific x-vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       vrtx = self._func_x_vorticity(use_full_state)
@@ -1011,10 +1016,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_y_specific_vorticity(self, use_full_state):
       """
-      Extract the specific y-vorticity in the desired mode.
+      Extract the specific y-vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       vrty = self._func_y_vorticity(use_full_state)
@@ -1024,10 +1029,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_z_specific_vorticity(self, use_full_state):
       """
-      Extract the specific z-vorticity in the desired mode.
+      Extract the specific z-vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       vrtz = self._func_z_vorticity(use_full_state)
@@ -1037,10 +1042,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_specific_vorticity_magnitude(self, use_full_state):
       """
-      Extract the magnitude of the specific vorticity in the desired mode.
+      Extract the magnitude of the specific vorticity.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       vrtx = self._func_x_vorticity(use_full_state)
@@ -1053,10 +1058,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_kinetic_energy_density(self, use_full_state):
       """
-      Extract the kinetic energy density in the desired mode.
+      Extract the kinetic energy density.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       momentum = self._func_momentum_magnitude(use_full_state)
@@ -1066,10 +1071,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_kinetic_energy_specific(self, use_full_state):
       """
-      Extract the specific kinetic energy in the desired mode.
+      Extract the specific kinetic energy.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       momentum = self._func_momentum_magnitude(use_full_state)
@@ -1079,10 +1084,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_total_energy_density(self, use_full_state):
       """
-      Extract the total energy density in the desired mode.
+      Extract the total energy density.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       if use_full_state:
@@ -1093,10 +1098,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_total_energy_specific(self, use_full_state):
       """
-      Extract the specific total energy in the desired mode.
+      Extract the specific total energy.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       Ener = self._func_total_energy_density(use_full_state) / \
@@ -1107,10 +1112,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_internal_energy_density(self, use_full_state):
       """
-      Extract the internal energy density in the desired mode.
+      Extract the internal energy density.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_total_energy_density(use_full_state) - \
@@ -1119,10 +1124,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_internal_energy_specific(self, use_full_state):
       """
-      Extract the specific internal energy in the desired mode.
+      Extract the specific internal energy.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_total_energy_specific(use_full_state) - \
@@ -1131,10 +1136,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_pressure(self, use_full_state):
       """
-      Extract the pressure in the desired mode.
+      Extract the pressure.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_internal_energy_density(use_full_state) * \
@@ -1143,10 +1148,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_entropy_specific(self, use_full_state):
       """
-      Extract the specific entropy in the desired mode.
+      Extract the specific entropy.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       PP = self._func_pressure(use_full_state) / self.params.pres_up
@@ -1157,10 +1162,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_entropy_density(self, use_full_state):
       """
-      Extract the entropy density in the desired mode.
+      Extract the entropy density.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_entropy_specific(use_full_state) * \
@@ -1169,10 +1174,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_sound_speed(self, use_full_state):
       """
-      Extract the speed of sound in the desired mode.
+      Extract the speed of sound.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       c2 = self.params.gamma * self._func_pressure(use_full_state) / \
@@ -1182,10 +1187,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_Mach_number(self, use_full_state):
       """
-      Extract the Mach number in the desired mode.
+      Extract the Mach number.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       return self._func_velocity_magnitude(use_full_state) / \
@@ -1194,10 +1199,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_enthalpy_specific(self, use_full_state):
       """
-      Extract the specific enthalpy in the desired mode.
+      Extract the specific enthalpy.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       u = self._func_internal_energy_specific(use_full_state)
@@ -1208,10 +1213,10 @@ class SimulationState(object):
    #===========================================================================
    def _func_enthalpy_density(self, use_full_state):
       """
-      Extract the enthalpy density in the desired mode.
+      Extract the enthalpy density.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       u = self._func_internal_energy_density(use_full_state)
@@ -1221,21 +1226,22 @@ class SimulationState(object):
    #===========================================================================
    def _func_convective_growth_rate(self, use_full_state):
       """
-      Extract the convective growth rate in the desired mode.
+      Extract the convective growth rate.
 
-      NOTE: The convective growth rate is the imaginary part of the Brunt
-      Vaisala frequency.
+      NOTE: The convective growth rate is the imaginary part of the
+      Brunt-Vaisala frequency.
 
-      NOTE: It is not immediately clear what the meaning of the "base state"
-      value is for this quantity.  The square of the Brunt-Vaisala frequency is
-      proportional to the dot product of the gravitational acceleration and the
-      specific entropy gradient.  I choose the most direct definition, which is
-      that the "base state" value of the square of the Brunt-Vaisala frequency
-      is proportional to the dot product of the gravitational acceleration and
-      the gradient of the base state specific entropy.
+      NOTE: It is not immediately clear what the meaning of the "base
+      state" value is for this quantity.  The square of the
+      Brunt-Vaisala frequency is proportional to the dot product of the
+      gravitational acceleration and the specific entropy gradient.  I
+      choose the most direct definition, which is that the "base state"
+      value of the square of the Brunt-Vaisala frequency is
+      proportional to the dot product of the gravitational acceleration
+      and the gradient of the base state specific entropy.
 
       Arguments:
-         use_full_state (bool) : return full state (True) or base state (False)
+         use_full_state (bool) : full (True) or base (False) state
       """
 
       g = self.params.gravity(self.x, self.y, self.z)

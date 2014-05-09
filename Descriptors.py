@@ -1,37 +1,31 @@
 """
 Specification of movie descriptors.
 
-The MovieDescriptor object describes the details necessary to construct a movie
-from data.  It describes the design of the images for each individual frame,
-and includes information relating to how those images will be encoded together
-into a movie.
+The MovieDescriptor object describes the details necessary to construct
+a movie from data.  It describes the design of the images for each
+individual frame, and includes information relating to how those images
+will be encoded together into a movie.
 
-The MaskDescriptor object describes the details of a mask.  This is a component
-used by MovieDescriptors to describe how to mask cells that are not
-"interesting enough" to be plotted.
+The MaskDescriptor object describes the details of a mask.  This is a
+component used by MovieDescriptors to describe how to mask cells that
+are not "interesting enough" to be plotted.
 
-The ModeDescriptor object describes the details of how to process a variable
-for a movie.  It allows specification of profiles or 2D pseudocolor plots, with
-a selection of transformations that may be applied.
+The ModeDescriptor object describes the details of how to process a
+variable for a movie.  It allows specification of profiles or 2D
+pseudocolor plots, with a selection of transformations that may be applied.
 
-The MovieLimits object describes the lower and upper limits on some quantity.
-The MovieWindow class packages three of these together to describe limits in 3D
-coordinates.  These two are essentially for packaging more than functionality.
+The MovieLimits object describes the lower and upper limits on some
+quantity.  The MovieWindow class packages three of these together to
+describe limits in 3D coordinates.  These two are essentially for
+packaging more than functionality.
 
-The DescriptorError class describes an error raised by one of the Descriptors.
-The errors raised by them tend to be related to illegal values (or illegal
-combinations of values), so they can be logically grouped together.  Giving
-them their own class means that calling routines can catch errors raised by the
-Descriptors separately from other errors (e.g. a ValueError in something used
-by one of the Descriptors, etc).
-
-Attributes:
-   DescriptorError (class) : exception for Descriptors
-   MovieLimits (class) : low/high limits of some quantity
-   MovieWindow (class) : low/high limits in 3 dimensions for a viewing space
-   MaskDescriptor (class) : description of a mask to be applied to the data
-   MovieDescriptor (class) : description of a movie to be made
-   ModeDescriptor (class) : description of the plotting mode of a variable
+The DescriptorError class describes an error raised by one of the
+Descriptors.  The errors raised by them tend to be related to illegal
+values (or illegal combinations of values), so they can be logically
+grouped together.  Giving them their own class means that calling
+routines can catch errors raised by the Descriptors separately from
+other errors (e.g. a ValueError in something used by one of the
+Descriptors, etc).
 """
 
 import copy
@@ -57,26 +51,28 @@ class DescriptorError(StandardError):
       """
       Initialize the exception.
 
-      Because StandardError explicitly states that it does not use any keyword
-      arguments, that gives the freedom to use any keyword arguments to
-      customize the initialization of DescriptorError.  Based on the arguments
-      supplied, the initialization selects between the following modes:
+      Because StandardError explicitly states that it does not use any
+      keyword arguments, that gives the freedom to use any keyword
+      arguments to customize the initialization of DescriptorError.
+      Based on the arguments supplied, the initialization selects
+      between the following modes:
       -- invalid=True:
-         A very common message: 'Invalid <parameter>: "<value>".', where
-         <parameter> and <value> are given as the first and second positional
-         arguments respectively.  The name of the parameter should be a string,
-         while the value may be any quantity that can be cast into a string.
+         A very common message: 'Invalid <parameter>: "<value>".',
+         where <parameter> and <value> are given as the first and
+         second positional arguments respectively.  The name of the
+         parameter should be a string, while the value may be any
+         quantity that can be cast into a string.
       -- join=True:
          Sometimes the message is the concatenation of a collection of
-         substrings.  In this case all positional arguments are cast to strings
-         and concatenated in order.
+         substrings.  In this case all positional arguments are cast to
+         strings and concatenated in order.
       -- message:
-         If there is only one positional argument and no special keyword
-         arguments, the positional argument is saved as the message.
+         If there is only one positional argument and no special
+         keyword arguments, the positional argument is saved as the message.
       -- other:
          In order to mimic the (apparent) behavior of StandardError, if
-         multiple positional arguments are supplied without any special keyword
-         arguments, then no message is stored.
+         multiple positional arguments are supplied without any special
+         keyword arguments, then no message is stored.
       """
 
       # Save the arguments
@@ -154,8 +150,8 @@ class MovieLimits(object):
       """
       Test whether the supplied argument is in the limits.
 
-      Note: This may be called with a scalar or a NumPy array.  Using NumPy's
-      ones_like and logical_and handles both cases.
+      Note: This may be called with a scalar or a NumPy array.  Using
+      NumPy's ones_like and logical_and handles both cases.
       """
       if self.lo is None:
          lo = np.ones_like(a, dtype=bool)
@@ -178,7 +174,7 @@ class MovieLimits(object):
 
 class MovieWindow(object):
    """
-   Viewing limits on a plot, to restrict the image to only a certain region.
+   Viewing limits on a plot, to restrict the image to a certain region.
    """
 
    def __init__(self):
@@ -215,12 +211,13 @@ class MaskDescriptor(object):
    """
    A description of a mask to be applied to the data prior to plotting.
 
-   This class describes a data mask.  It specifies a variable, mode, threshold,
-   and operator.  As an example to explain, if the variable is entropy, the
-   mode is perturbation, the threshold is zero, and the operator is less than,
-   the applied mask will hide all cells where the entropy perturbation is less
-   than zero.  The operators are supplied by a string and the permitted values
-   are "<=", "<", ">", and ">=".
+   This class describes a data mask.  It specifies a variable, mode,
+   threshold, and operator.  As an example to explain, if the variable
+   is entropy, the mode is perturbation, the threshold is zero, and the
+   operator is less than, the applied mask will hide all cells where
+   the entropy perturbation is less than zero.  The operators are
+   supplied by a string and the permitted values are "<=", "<", ">",
+   and ">=".
 
    Attributes:
       _variable (string) : the variable used for computing the mask
@@ -252,7 +249,7 @@ class MaskDescriptor(object):
          None
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       # Get the values and do conversions before changing the internal storage
@@ -298,9 +295,9 @@ class MaskDescriptor(object):
       """
       Compute the described mask based on the supplied data.
 
-      The mask is the object that hides part of what it is applied to, so the
-      mask will be true for cells that are to be hidden and false for cells
-      that are to be displayed.
+      The mask is the object that hides part of what it is applied to,
+      so the mask will be true for cells that are to be hidden and
+      false for cells that are to be displayed.
 
       Arguments:
          state (SimulationState) : the current state of the simulation
@@ -309,7 +306,7 @@ class MaskDescriptor(object):
          an array specifying the mask
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       var = self._mode.extract(self._variable, state)
@@ -341,13 +338,13 @@ class MovieDescriptor(object):
    """
    A description of a movie to be constructed.
 
-   This class describes a movie to be made from some data set.  It includes
-   information regarding the layout and design of the images to be used in the
-   movie, as well as information regarding the encoding of the individual
-   frames into a movie.
+   This class describes a movie to be made from some data set.  It
+   includes information regarding the layout and design of the images
+   to be used in the movie, as well as information regarding the
+   encoding of the individual frames into a movie.
 
    Attributes:
-      title (string) : title to print on top of frames (or None for default)
+      title (string) : title for top of frames (or None for default)
       stub (string) : the stub of the output files (images and movie)
       path (string) : the path to where the movie will be saved
       image_type (string) : the extension for the image files
@@ -358,9 +355,9 @@ class MovieDescriptor(object):
       value_limits (MovieLimits) : the limits on the colorbar
       fps (float) : the frame rate for the movie in frames per second
       movie_type (string) : the extension for the movie file
-      make_movie (bool) : flag to generate the movie after making the frames
+      make_movie (bool) : generate the movie after making the frames
       final_pause (int) : the number of extra copies of the final frame
-      masks (list of MaskDescriptors) : the masks to be applied (if any)
+      masks (list of MaskDescriptors) : the masks to be applied
       mask_method (string) : how to apply the masks
       xlines (list of floats) : list of x-positions to mark with lines
    """
@@ -403,7 +400,7 @@ class MovieDescriptor(object):
          an array specifying the mask
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       # Use temporaries to store the values until all the processing is done.
@@ -538,17 +535,19 @@ class MovieDescriptor(object):
       """
       Compute the data for a single frame of the described movie.
 
-      Collapsing the data to a lower dimensionality (2D slice, 1D profile, etc)
-      will be handled elsewhere.  This routine ignores the dimensionality of
-      the requested mode and returns the full 3D state.  It is up to the
-      plotting routine to collapse as needed.  The reason for this is that the
-      profile plots don't extract a single line from the data, but instead 6
-      lines: two can be processed from the 3D equivalent, one can be processed
-      from the 3D equivalent of the base state, and three can be processed from
-      the 3D equivalent of the initial state.  Thus to plot the profile, the
-      plotter will call frame_data_3D three times with variations on the
-      original mode or with different states, and process the three resulting
-      3D arrays into the six desired 1D lines that are plotted.
+      Collapsing the data to a lower dimensionality (2D slice, 1D
+      profile, etc) will be handled elsewhere.  This routine ignores
+      the dimensionality of the requested mode and returns the full 3D
+      state.  It is up to the plotting routine to collapse as needed.
+      The reason for this is that the profile plots don't extract a
+      single line from the data, but instead 6 lines: two can be
+      processed from the 3D equivalent, one can be processed from the
+      3D equivalent of the base state, and three can be processed from
+      the 3D equivalent of the initial state.  Thus to plot the
+      profile, the plotter will call frame_data_3D three times with
+      variations on the original mode or with different states, and
+      process the three resulting 3D arrays into the six desired 1D
+      lines that are plotted.
 
       Arguments:
          state (SimulationState) : the current state of the simulation
@@ -562,27 +561,21 @@ class MovieDescriptor(object):
          vhi (float) : the highest value for the plot range
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       # Get the data for the desired variable
       var = self.mode.extract(self.variable, state)
 
       # Apply the limits from the MovieWindow
-      x = state.x[:,0,0]
-      x_idx = self.window.x.test(x)
-      x = x[x_idx]
-      x = x.reshape((len(x),1,1))
+      x_idx = self.window.x.test(state.x[:,0,0])
+      x = state.x[x_idx,0:1,0:1]
 
-      y = state.y[0,:,0]
-      y_idx = self.window.y.test(y)
-      y = y[y_idx]
-      y = y.reshape((1,len(y),1))
+      y_idx = self.window.y.test(state.y[0,:,0])
+      y = state.y[0:1,y_idx,0:1]
 
-      z = state.z[0,0,:]
-      z_idx = self.window.z.test(z)
-      z = z[z_idx]
-      z = z.reshape((1,1,len(z)))
+      z_idx = self.window.z.test(state.z[0,0,:])
+      z = state.z[0:1,0:1,z_idx]
 
       var = var[x_idx,:,:]
       var = var[:,y_idx,:]
@@ -657,22 +650,16 @@ class MovieDescriptor(object):
       """
       Draw a single frame of the movie
 
-      In order to be generic for future development, this will be a fairly
-      lightweight wrapper.  It creates a new figure, creates a subplot that
-      fills the figure, and passes the axes to a routine for plotting.  Future
-      development will allow multiple subplots, which would require extracting
-      multiple subplots and calling the appropriate drawing routines.
-
-      Note on file locations: If the path is absolute, the movie will be stored
-      there.  If the path is relative, it will be assumed to be relative to the
-      directory where the simulation data file is stored.  If the path is None,
-      the movie will be stored in the same directory where the simulation data
-      is found.  The frame images will be stored in a subdirectory called
-      "frames" relative to the directory where the movie will be stored.
+      In order to be generic for future development, this will be a
+      fairly lightweight wrapper.  It creates a new figure, creates a
+      subplot that fills the figure, and passes the axes to a routine
+      for plotting.  Future development will allow multiple subplots,
+      which would require extracting multiple subplots and calling the
+      appropriate drawing routines.
 
       Arguments:
          state (SimulationState) : the current state of the simulation
-         data_dir (string) : the directory where the simulation data is stored
+         data_dir (string) : directory where the simulation data is
          data_num (int) : the number of the current data file
          state0 (SimulationState) : the initial state of the simulation
 
@@ -714,13 +701,14 @@ class MovieDescriptor(object):
       """
       Draw a 2D pseudocolor plot as one panel of a figure.
 
-      This routine assumes that we are plotting a slice in the xy-plane at a
-      z-index of zero.  This comes from the structure of data in DUMSES for a
-      2D simulation, and can be modified later if I generate 3D data.
+      This routine assumes that we are plotting a slice in the xy-plane
+      at a z-index of zero.  This comes from the structure of data in
+      DUMSES for a 2D simulation, and can be modified later if I
+      generate 3D data.
 
       Arguments:
          state (SimulationState) : the current state of the simulation
-         axes (matplotlib.axes.Axes) : the axes to draw the pseudocolor plot on
+         axes (matplotlib.axes.Axes) : the axes to draw on
 
       Returns:
          None
@@ -798,9 +786,15 @@ class MovieDescriptor(object):
 
       # Construct the title
       if self.title is None:
-         axes.set_title(" ".join((self.variable, str(self.mode))))
+         title = "{v} {m}\n{t:10.3e}s".format(
+               v=self.variable, m=self.mode, t=state.t)
+         #axes.set_title(" ".join((self.variable, str(self.mode))))
+      elif self.title == "":
+         title = "{t:10.3e}s".format(t=state.t)
       else:
-         axes.set_title(self.title)
+         title = "{s}\n{t:10.3e}s".format(s=self.title, t=state.t)
+         #axes.set_title(self.title)
+      axes.set_title(title)
 
       # Compute ticks (x, y, color)
       ntickx = 6
@@ -815,23 +809,24 @@ class MovieDescriptor(object):
       """
       Draw the profiles as one panel of a figure.
 
-      This routine assumes that we are plotting a profile along the x-axis, and
-      computes the mean and standard deviation along that axis.
+      This routine assumes that we are plotting a profile along the
+      x-axis, and computes the mean and standard deviation along that
+      axis.
 
       The figure is split into two panels:
          the upper panel:
             the mean state +/- the standard deviation
-            the unperturbed base state +/- the initial standard deviation
+            the unperturbed base state +/- initial standard deviation
             the initial maximum and minimum states
          the lower panel:
             the standard deviation
             the initial standard deviation
-      The profiles derived from the initial state will not be plotted if None
-      is supplied for state0.
+      The profiles derived from the initial state will not be plotted
+      if None is supplied for state0.
 
       Arguments:
          state (SimulationState) : the current state of the simulation
-         axes (matplotlib.axes.Axes) : the axes to draw the profile plot on
+         axes (matplotlib.axes.Axes) : the axes to draw on
          state0 (SimulationState) : the initial state of the simulation
 
       Returns:
@@ -903,9 +898,15 @@ class MovieDescriptor(object):
 
       # Construct the title
       if self.title is None:
-         ax_prof.set_title(" ".join((self.variable, str(self.mode))))
+         title = "{v} {m}\n{t:10.3e}s".format(
+               v=self.variable, m=self.mode, t=state.t)
+         #axes.set_title(" ".join((self.variable, str(self.mode))))
+      elif self.title == "":
+         title = "{t:10.3e}s".format(t=state.t)
       else:
-         ax_prof.set_title(self.title)
+         title = "{s}\n{t:10.3e}s".format(s=self.title, t=state.t)
+         #axes.set_title(self.title)
+      ax_prof.set_title(title)
 
       # Label axes and set ticks
       plt.setp(ax_prof.get_xticklabels(), visible=False)
@@ -941,12 +942,14 @@ class MovieDescriptor(object):
       if self.value_limits.hi is not None:
          vhi = self.value_limits.hi
       ax_prof.set_ylim([vlo, vhi])
+      ax_prof.set_xlim([x.min(), x.max()])
 
       # Set the plotting limits (deviations panel)
       vhi = stdv.max()
       if vhi == 0.0:
          vhi = 1.0
       ax_stdv.set_ylim([0.0, vhi])
+      ax_stdv.set_xlim([x.min(), x.max()])
 
 # End of MovieDescriptor class
 #==============================================================================
@@ -961,26 +964,27 @@ class ModeDescriptor(object):
    """
    The mode to use when plotting a quantity.
 
-   This object has several different initialization routines: default, from a
-   descriptive string, or from the specific properties of the mode.  The mode
-   properties are visible to users, but filling them in with the initialization
-   routine performs consistency checks.
+   This object has several different initialization routines: default,
+   from a descriptive string, or from the specific properties of the
+   mode.  The mode properties are visible to users, but filling them in
+   with the initialization routine performs consistency checks.
 
    The attributes in a bit more detail:
    -- The dimension can take the value 1 (for a profile) or 2 (for a
       pseudocolor).  This can be extended to 3 when I have a chance to
-      implement 3D visualizations.  When the dimension is 1, only 3 modes are
-      allowed: full state, or the perturbation or contrast relative to the base
-      state.
+      implement 3D visualizations.  When the dimension is 1, only 3
+      modes are allowed: full state, or the perturbation or contrast
+      relative to the base state.
    -- The transform may be "none" (the reference state), "perturbation"
       (subtract the reference state from the full state), or "contrast"
       (subtract and divide by the reference state).
-   -- The reference state may be "full" (only allowed in conjunction with the
-      "none" transformation to specify that the full state should be plotted),
-      "base" (the steady base state for the unperturbed initial conditions), or
-      "mean" (the horizontal average of the state).
-   -- The absolute value operator may only be applied to pseudocolor plots of
-      the perturbation or the contrast.
+   -- The reference state may be "full" (only allowed in conjunction
+      with the "none" transformation to specify that the full state
+      should be plotted), "base" (the steady base state for the
+      unperturbed initial conditions), or "mean" (the horizontal
+      average of the state).
+   -- The absolute value operator may only be applied to pseudocolor
+      plots of the perturbation or the contrast.
 
    Attributes:
       dimension (int) : the dimensionality of the result
@@ -1029,7 +1033,7 @@ class ModeDescriptor(object):
          None
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       if string is None:
@@ -1104,7 +1108,7 @@ class ModeDescriptor(object):
          None
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       if a and d == 1:
@@ -1145,7 +1149,7 @@ class ModeDescriptor(object):
          None
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       if self.dimension == 1:
@@ -1189,16 +1193,16 @@ class ModeDescriptor(object):
    #===========================================================================
    def extract(self, variable, state):
       """
-      Extract the data from the state and apply the appropriate operations.
+      Extract the data from the state (with appropriate operations).
 
-      This serves as a wrapper around the SimulationState's extract method in
-      order to handle complicated modes (SimulationState is only "aware" of the
-      full-state and base-state modes).
+      This serves as a wrapper around the SimulationState's extract
+      method in order to handle complicated modes (SimulationState is
+      only "aware" of the full-state and base-state modes).
 
-      Dimensionality is ignored.  As discussed in the MovieDescriptor, all
-      extraction is done on the full 3D state, and the plotting routine is
-      responsible for understanding enough about the mode to process the data
-      into its final form.
+      Dimensionality is ignored.  As discussed in the MovieDescriptor,
+      all extraction is done on the full 3D state, and the plotting
+      routine is responsible for understanding enough about the mode to
+      process the data into its final form.
 
       Arguments:
          variable (string) : the name of the variable to be extracted
@@ -1208,7 +1212,7 @@ class ModeDescriptor(object):
          the variable array
 
       Exceptions:
-         DescriptorError describing invalid options or combinations of options
+         DescriptorError for invalid options or combinations of options
       """
 
       if self.transform == "none":
@@ -1223,7 +1227,7 @@ class ModeDescriptor(object):
             var = state.extract(variable)
             shape = var.shape
             var = np.mean(var.reshape((shape[0], shape[1]*shape[2])), axis=1)
-            var = var.reshape([shape[0], 1, 1])
+            var = var[:,None,None]
             var = var.repeat(shape[1], axis=1).repeat(shape[2], axis=2)
          else:
             raise DescriptorError("reference state", self.reference,
@@ -1236,7 +1240,7 @@ class ModeDescriptor(object):
             ref = state.extract(variable)
             shape = ref.shape
             ref = np.mean(ref.reshape((shape[0], shape[1]*shape[2])), axis=1)
-            ref = ref.reshape([shape[0], 1, 1])
+            ref = ref[:,None,None]
             ref = ref.repeat(shape[1], axis=1).repeat(shape[2], axis=2)
          else:
             raise DescriptorError("reference state", self.reference,

@@ -1,10 +1,10 @@
 """
 Driver for making movies.
 
-This parses the command line, does some housekeeping, compiles the appropriate
-descriptors from input files, handles parallelization, and does other
-"outermost loop" tasks of this sort to set up what's necessary to run the movie
-maker.
+This parses the command line, does some housekeeping, compiles the
+appropriate descriptors from input files, handles parallelization, and
+does other "outermost loop" tasks of this sort to set up what's
+necessary to run the movie maker.
 """
 
 # TODO : Develop an extensive testing suite
@@ -102,7 +102,7 @@ if __name__ == "__main__":
                "{0} through {1} will do no work.".format(Nout, NProcs-1)))
             warnings.warn(msg, UserWarning)
          output_list = full_list[::NProcs]
-         for i in xrange(1, min(NProcs,Nout)):
+         for i in xrange(1, NProcs):
             pypar.send(full_list[i::NProcs], destination=i)
       else:
          output_list = full_list
@@ -188,7 +188,11 @@ if __name__ == "__main__":
          pypar.barrier()
 
    # Call the primary loop
-   make_all_frames(output_list, movies)
+   if len(movies) == 0:
+      if ProcID == 0:
+         sys.stdout.write("No movies to generate.\n")
+   else:
+      make_all_frames(output_list, movies)
 
    # Encode the movies
    # TODO : For every movie that calls for this step, encode the individual
