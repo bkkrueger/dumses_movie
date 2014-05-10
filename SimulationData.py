@@ -48,33 +48,16 @@ class SimulationInput(object):
    from the inputs file.  It includes methods to initialize from a file
    and to construct the source functions.
 
-   Some attributes are carried for computation purposes (such as
-   _heat_coef and _grav_coef, to avoid constantly recalculating them),
-   while others for informational purposes (such as _Kheat and _Kgrav, which
-   are useful for summarizing the information stored).  Only the
-   necessary attributes are "public", while the others are "hidden";
-   this is to suggest to the user that they not mess with more
-   attributes than necessary, because some of these quantities are
-   interdependent and changing one would require changing several other
-   quantities in order to maintain, e.g., thermodynamic consistency.
-   Property decorators could be used in order to maintain such
-   consistency conditions, but changing only one quantity does not
-   clearly define which other quantities should change or how they
-   should change.
-
    Attributes:
-      __initialized (bool) : is the object is initialized
       gamma (float) : adiabatic index
-      pres_up (float) : scaling value for pressure
-      dens_up (float) : scaling value for density
-      _csnd_up (float) : scaling value for sound speed
-      _mach_up (float) : scaling value for Mach number
+      shape (string) : name of the shape function for the sources
       layer_width (float) : width parameter for source layer
-      _shape (string) : name of the shape function for the sources
-      _heat_coef (float) : coefficient for heating
-      _grav_coef (float) : coefficient for gravity
-      _Kheat (float) : dimensionless heating strength factor
-      _Kgrav (float) : dimensionless gravity strength factor
+      dens_up (float) : scaling value for density
+      pres_up (float) : scaling value for pressure (unsettable)
+      csnd_up (float) : scaling value for sound speed
+      mach_up (float) : scaling value for Mach number
+      K_heat (float) : dimensionless heating strength factor
+      K_grav (float) : dimensionless gravity strength factor
    """
 
    #===========================================================================
@@ -82,19 +65,18 @@ class SimulationInput(object):
       """
       Supply a detailed representation of the class.
       """
-      if self.__initialized:
-         string = "   \n".join(("Simulation inputs:",
-            "gamma = {0}".format(self.gamma),
-            "shape = {0}".format(self._shape),
-            "Kheat = {0}".format(self._Kheat),
-            "Kgrav = {0}".format(self._Kgrav),
-            "upstream conditions:",
-            "   dens = {0}".format(self.dens_up),
-            "   csnd = {0}".format(self._csnd_up),
-            "   Mach = {0}".format(self._mach_up)
-            ))
-      else:
-         string = "Simulation inputs (uninitialized)"
+      string = "   \n".join(("Simulation inputs:",
+         "gamma = {0}".format(self.gamma),
+         "source layer:",
+         "   shape = {0}".format(self.shape),
+         "   width = {0}".format(self.layer_width),
+         "   Kheat = {0}".format(self.K_heat),
+         "   Kgrav = {0}".format(self.K_grav),
+         "upstream conditions:",
+         "   dens = {0}".format(self.dens_up),
+         "   csnd = {0}".format(self.csnd_up),
+         "   Mach = {0}".format(self.mach_up)
+         ))
       return string
 
    #===========================================================================
@@ -102,11 +84,7 @@ class SimulationInput(object):
       """
       Supply a simple representation of the class.
       """
-      if self.__initialized:
-         string = "SimulationInputs (initialized)"
-      else:
-         string = "SimulationInputs (uninitialized)"
-      return string
+      return "SimulationInput"
 
    #===========================================================================
    def __init__(self, *args, **kwargs):
@@ -128,22 +106,17 @@ class SimulationInput(object):
       Flush the data to give an uninitialized instance.
       """
 
-      self.__initialized = False
-
       self.gamma = None
 
-      self.pres_up = None
       self.dens_up = None
-      self._csnd_up = None
-      self._mach_up = None
+      self.csnd_up = None
+      self.mach_up = None
 
       self.layer_width = None
-      self._shape = None
+      self.shape = None
 
-      self._heat_coef = None
-      self._grav_coef = None
-      self._Kheat = None
-      self._Kgrav = None
+      self.K_heat = None
+      self.K_grav = None
 
    #===========================================================================
    def construct(self, inputs_file_name):
@@ -206,39 +179,28 @@ class SimulationInput(object):
             # scientific notation for double-precision constants)
             inputs_dict[key] = float(inputs_dict[key].replace("d","e"))
 
-      # Construct desired quantities
-      gamma = inputs_dict["gamma"]
+      # Store quantities now that they've been constructed/verified
+      self.gamma = inputs_dict["gamma"]
 
-      csnd_up = inputs_dict["csnd_up"]
-      mach_up = inputs_dict["mach_up"]
-      dens_up = inputs_dict["dens_up"]
-      pres_up = dens_up * csnd_up**2 / gamma
+      self.csnd_up = inputs_dict["csnd_up"]
+      self.mach_up = inputs_dict["mach_up"]
+      self.dens_up = inputs_dict["dens_up"]
 
-      layer_width = inputs_dict["layer_limit"]
-      shape = inputs_dict["layer_shape"]
+      self.layer_width = inputs_dict["layer_limit"]
+      self.shape = inputs_dict["layer_shape"]
 
-      Kheat = inputs_dict["Kheat"]
-      heat_coef = Kheat * (mach_up * csnd_up**3) / (layer_width * gamma)
-      Kgrav = inputs_dict["Kgrav"]
-      grav_coef = - Kgrav *  csnd_up**2 / layer_width
+      self.K_heat = inputs_dict["Kheat"]
+      self.K_grav = inputs_dict["Kgrav"]
 
-      # Save values now that all computations and checks are complete
-      self.gamma = gamma
-
-      self._csnd_up = csnd_up
-      self._mach_up = mach_up
-      self.dens_up = dens_up
-      self.pres_up = pres_up
-
-      self.layer_width = layer_width
-      self._shape = shape
-
-      self._Kheat = Kheat
-      self._heat_coef = heat_coef
-      self._Kgrav = Kgrav
-      self._grav_coef = grav_coef
-
-      self.__initialized = True
+   #===========================================================================
+   @property
+   def pres_up(self):
+      if None in [self.dens_up, self.csnd_up, self.gamma]:
+         msg = " ".join(("Cannot compute upstream pressure scale without",
+            "defining the adiabatic index and the upstream scales for density",
+            "and sound speed."))
+         raise SimulationError(msg)
+      return self.dens_up * self.csnd_up**2 / self.gamma
 
    #===========================================================================
    def _shape_function(self, x, y, z):
@@ -257,16 +219,15 @@ class SimulationInput(object):
          SimulationError flagging an uninitialized object
       """
 
-      if not self.__initialized:
-         msg = " ".join(("Cannot compute shape function on an uninitialized",
-            "SimulationInput object."))
-         raise SimulationError(msg)
+      if None in [self.layer_width, self.shape]:
+         msg = " ".join(("Cannot compute shape function without defining the",
+            "shape name and width."))
 
       XX = np.abs(x / self.layer_width)
 
-      if self._shape == 'trapezoid':
-         f = np.clip(2.0 * (1.0 - XX), 0.0, 1.0)
-      elif self._shape == 'square':
+      if self.shape == "trapezoid":
+         f = np.clip(2 * (1.0 - XX), 0.0, 1.0)
+      elif self.shape == "square":
          f = np.zeros_like(x)
          f[XX <= 1.0] = 1.0
       else:
@@ -293,13 +254,15 @@ class SimulationInput(object):
          SimulationError flagging an uninitialized object
       """
 
-      if not self.__initialized:
-         msg = " ".join(("Cannot compute gravity function on an uninitialized",
-            "SimulationInput object."))
+      if None in [self.K_grav, self.csnd_up, self.layer_width]:
+         msg = " ".join(("Cannot compute gravity without defining gravity",
+            "scaling constant, upstream sound speed scaling,",
+            "and shape width."))
          raise SimulationError(msg)
 
-      grav = np.zeros((x.shape[0], y.shape[1], z.shape[2], 3))
-      grav[...,0] = self._grav_coef * self._shape_function(x,y,z)
+      grav_coef = - Kgrav *  csnd_up**2 / layer_width
+      grav = np.zeros((x.shape[0], y.shape[1], z.shape[2], 3), dtype=float)
+      grav[...,0] = grav_coef * self._shape_function(x,y,z)
 
       return grav
 
@@ -321,12 +284,15 @@ class SimulationInput(object):
          SimulationError flagging an uninitialized object
       """
 
-      if not self.__initialized:
-         msg = " ".join(("Cannot compute heating function on an uninitialized",
-            "SimulationInput object."))
+      if None in [self.K_heat, self.mach_up, self.csnd_up, self.layer_width,
+            self.gamma]:
+         msg = " ".join(("Cannot compute heating without defining heating",
+            "scaling constant, shape width, adiabatic index, and upstream",
+            "scaling of sound speed and Mach number."))
          raise SimulationError(msg)
 
-      return (self._heat_coef * density * self._shape_function(x, y, z))
+      heat_coef = Kheat * (mach_up * csnd_up**3) / (layer_width * gamma)
+      return (heat_coef * density * self._shape_function(x, y, z))
 
 # End class SimulationInput
 #==============================================================================

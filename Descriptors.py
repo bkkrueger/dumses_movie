@@ -12,7 +12,8 @@ are not "interesting enough" to be plotted.
 
 The ModeDescriptor object describes the details of how to process a
 variable for a movie.  It allows specification of profiles or 2D
-pseudocolor plots, with a selection of transformations that may be applied.
+pseudocolor plots, with a selection of transformations that may be
+applied.
 
 The MovieLimits object describes the lower and upper limits on some
 quantity.  The MovieWindow class packages three of these together to
@@ -68,7 +69,8 @@ class DescriptorError(StandardError):
          strings and concatenated in order.
       -- message:
          If there is only one positional argument and no special
-         keyword arguments, the positional argument is saved as the message.
+         keyword arguments, the positional argument is saved as the
+         message.
       -- other:
          In order to mimic the (apparent) behavior of StandardError, if
          multiple positional arguments are supplied without any special
