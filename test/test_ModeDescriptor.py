@@ -18,34 +18,56 @@ class ModeDescriptorTest(unittest.TestCase):
             for t in ["none", "perturbation", "contrast", "junk"]:
                for r in ["full", "base", "mean", "junk"]:
                   pc = ["perturbation", "contrast"]
-                  if (("junk" in [d, a, t, r]) or
-                        (r == "full" and t != "none") or
-                        (a and t not in pc) or
-                        (a and d == 1) or
-                        (d == 1 and r == "mean") or
-                        (d == 1 and r == "base" and t not in pc)):
-                     print "FAIL :", d, a, t, r
+                  if "junk" in [d, a, t, r]:
                      self.assertRaises(DescriptorError,
-                           mm = ModeDescriptor(d, a, t, r))
+                           ModeDescriptor, d, a, t, r)
+                  elif r == "full" and t != "none":
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
+                  elif a and t not in pc :
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
+                  elif a and d == 1:
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
+                  elif d == 1 and r == "mean":
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
+                  elif d == 1 and r == "base" and t not in pc:
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
                   else:
-                     print "TEST :", d, a, t, r
                      mm = ModeDescriptor(d, a, t, r)
 
    def test_loop(self):
+      """
+      Test that parameters --> Mode gives the same parameters and that
+      str(Mode) --> Mode gives the same parameters.
+      """
 
       for d in [1, 2]:
          for a in [False, True]:
             for t in ["none", "perturbation", "contrast"]:
                for r in ["full", "base", "mean"]:
-                  if r == "full" and t != "none":
+                  pc = ["perturbation", "contrast"]
+                  if "junk" in [d, a, t, r]:
                      self.assertRaises(DescriptorError,
-                           mm = ModeDescriptor(d, a, t, r))
-                  elif a and t not in ["perturbation", "contrast"]:
+                           ModeDescriptor, d, a, t, r)
+                  elif r == "full" and t != "none":
                      self.assertRaises(DescriptorError,
-                           mm = ModeDescriptor(d, a, t, r))
-                  elif a and d != 2:
+                           ModeDescriptor, d, a, t, r)
+                  elif a and t not in pc :
                      self.assertRaises(DescriptorError,
-                           mm = ModeDescriptor(d, a, t, r))
+                           ModeDescriptor, d, a, t, r)
+                  elif a and d == 1:
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
+                  elif d == 1 and r == "mean":
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
+                  elif d == 1 and r == "base" and t not in pc:
+                     self.assertRaises(DescriptorError,
+                           ModeDescriptor, d, a, t, r)
                   else:
                      mm = ModeDescriptor(d, a, t, r)
                      self.assertEqual(d, mm.dimension,

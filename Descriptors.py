@@ -148,6 +148,15 @@ class MovieLimits(object):
          hi = self.hi
       return "[{l},{h}]".format(l=lo, h=hi)
 
+   def valid(self):
+      """
+      Verify that the lower limit is below the upper limit.
+      """
+      if None not in [self.lo, self.hi]:
+         return self.lo < self.hi
+      else:
+         return True
+
    def test(self, a):
       """
       Test whether the supplied argument is in the limits.
@@ -261,7 +270,11 @@ class MaskDescriptor(object):
       if m.dimension == 1:
          raise DescriptorError("Masks cannot be defined based on a profile.")
 
-      t = float(dictionary["threshold"])
+      try:
+         t = float(dictionary["threshold"])
+      except ValueError:
+         raise DescriptorError(
+               "Mask threshold must be a floating-point number.")
 
       o = dictionary["operator"]
       if o not in ["<", "<=", ">", ">="]:
@@ -426,7 +439,7 @@ class MovieDescriptor(object):
 
       title = dictionary.get("title", None)
       stub = dictionary["stub"]
-      path = dictionary["path"]
+      path = dictionary.get("path", None)
       image_type = dictionary["image_type"]
       variable = dictionary["variable"]
       mode = ModeDescriptor(dictionary.get("mode", "pseudocolor: full state"))
@@ -434,18 +447,28 @@ class MovieDescriptor(object):
       window = MovieWindow()
       window.x.lo = flote(dictionary.get("window_x_lo", None))
       window.x.hi = flote(dictionary.get("window_x_hi", None))
+      if not window.x.valid():
+         raise DescriptorError("Window lower limit must be below upper limit.")
       window.y.lo = flote(dictionary.get("window_y_lo", None))
       window.y.hi = flote(dictionary.get("window_y_hi", None))
+      if not window.y.valid():
+         raise DescriptorError("Window lower limit must be below upper limit.")
       window.z.lo = flote(dictionary.get("window_z_lo", None))
       window.z.hi = flote(dictionary.get("window_z_hi", None))
+      if not window.z.valid():
+         raise DescriptorError("Window lower limit must be below upper limit.")
 
       time_limits = MovieLimits()
       time_limits.lo = flote(dictionary.get("time_lo", None))
       time_limits.hi = flote(dictionary.get("time_hi", None))
+      if not time_limits.valid():
+         raise DescriptorError("Time lower limit must be below upper limit.")
 
       value_limits = MovieLimits()
       value_limits.lo = flote(dictionary.get("value_lo", None))
       value_limits.hi = flote(dictionary.get("value_hi", None))
+      if not value_limits.valid():
+         raise DescriptorError("Value lower limit must be below upper limit.")
 
       # If we are merging the frames into a movie, the frame rate (fps) and
       # movie type (movie_type) parameters are required.  However, if we are
@@ -1112,6 +1135,12 @@ class ModeDescriptor(object):
       Exceptions:
          DescriptorError for invalid options or combinations of options
       """
+
+      if a not in [True, False]:
+         raise DescriptorError("The absolute flag must be true or false.")
+
+      if d not in [1, 2]:
+         raise DescriptorError("The dimension must be one or two.")
 
       if a and d == 1:
          raise DescriptorError("Cannot apply absolute value to a profile.")

@@ -1,0 +1,12 @@
+&physics_params
+    mach_up          = 1.0d-1
+   ,csnd_up          = 2.0e1
+   ,dens_up          = 0.5
+   ,gamma            = 1.3333333333333333333333333333333d0 /
+
+&buoyant_params
+    Kheat            = 3.000000d-1
+   ,Kgrav            = 2.d0
+   ,layer_shape      = 'trapezoid'
+   ,layer_limit      = 1.0d-1 /
+

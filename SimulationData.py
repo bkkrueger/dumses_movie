@@ -260,7 +260,7 @@ class SimulationInput(object):
             "and shape width."))
          raise SimulationError(msg)
 
-      grav_coef = - Kgrav *  csnd_up**2 / layer_width
+      grav_coef = - self.K_grav *  self.csnd_up**2 / self.layer_width
       grav = np.zeros((x.shape[0], y.shape[1], z.shape[2], 3), dtype=float)
       grav[...,0] = grav_coef * self._shape_function(x,y,z)
 
@@ -291,7 +291,8 @@ class SimulationInput(object):
             "scaling of sound speed and Mach number."))
          raise SimulationError(msg)
 
-      heat_coef = Kheat * (mach_up * csnd_up**3) / (layer_width * gamma)
+      heat_coef = (self.K_heat * (self.mach_up * self.csnd_up**3) /
+            (self.layer_width * self.gamma))
       return (heat_coef * density * self._shape_function(x, y, z))
 
 # End class SimulationInput
