@@ -1,11 +1,10 @@
 [movies.sample]
-   stub = 'vort_'
+   stub = 'vort'
    path = 'movies/test/'
    variable = 'specific z vorticity'
    mode = 'pseudocolor: full state'
    window_x_lo = -3.0
    window_x_hi =  3.0
-   make_movie = false
    final_pause = '0f'
    fps = 12
    image_type = 'png'
@@ -14,7 +13,7 @@
 
 [movies.entr]
    title = "entropy perturbation"
-   stub = 'entr_'
+   stub = 'entr'
    path = 'movies/test'
    variable = 'specific entropy'
    mode = 'pseudocolor: perturbation'
@@ -22,7 +21,6 @@
    window_x_hi =  2
    window_y_lo = -3
    window_y_hi =  3
-   make_movie = false
    final_pause = '0f'
    fps = 12
    image_type = 'png'
@@ -44,7 +42,7 @@
    threshold = 0
 
 [movies.profile1]
-   stub = "prof1_"
+   stub = "prof1"
    path = "movies/test"
    variable = "specific entropy"
    mode = "profile: full state"
@@ -55,7 +53,7 @@
    xlines = [-0.5, 0.0, 0.5]
 
 [movies.profile2]
-   stub = "prof2_"
+   stub = "prof2"
    path = "movies/test"
    variable = "density"
    mode = "profile: full state"
@@ -65,7 +63,7 @@
    final_pause = "0.35s"
 
 [movies.profile3]
-   stub = "prof3_"
+   stub = "prof3"
    path = "movies/test"
    variable = "specific z vorticity"
    mode = "profile: full state"
@@ -75,7 +73,7 @@
    final_pause = "0.35s"
 
 [movies.profile4]
-   stub = "prof4_"
+   stub = "prof4"
    path = "movies/test"
    variable = "sound speed"
    mode = "profile: full state"
@@ -85,7 +83,7 @@
    final_pause = "0.35s"
 
 [movies.profile5]
-   stub = "prof5_"
+   stub = "prof5"
    path = "movies/test"
    variable = "x velocity"
    mode = "profile: full state"
@@ -95,10 +93,11 @@
    final_pause = "0.35s"
 
 [movies.profile6]
-   stub = "prof6_"
+   stub = "prof6"
    path = "movies/test"
    variable = "pressure"
    mode = "profile: contrast"
    image_type = "png"
-   make_movie = false
+   fps = 20
+   movie_type = "avi"
 

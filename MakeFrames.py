@@ -7,16 +7,6 @@ Attributes:
    make_all_frames : makes all frames for lists of outputs and movies
 """
 
-# TODO : Idea: Allow specification of colorbar limits as function of time.
-#        Currently I allow a static colorbar minimum/maximum, but can this be
-#        extended in some way to be time-dependent?  In theory, yes: a list of
-#        triplets giving a time, a minimum, and a maximum (where min and max
-#        can be None).  The simplest implementation would then be to change the
-#        colorbar limits in a piecewise constant manner at those times, but it
-#        would look better to do a piecewise linear interpolation.  Higher
-#        order may or may not add any benefit.  I will have to think about: (a)
-#        is such a feature useful; (b) is there a better way to implement it?
-
 import copy
 import errno
 import matplotlib.cm as cm
@@ -34,7 +24,7 @@ import SimulationData as SD
 
 #==============================================================================
 
-def make_all_frames(data_list, movie_list):
+def make_all_frames(data_list, movie_list, encode_locations):
    """
    Makes all frames based on lists of data sources and of movies.
 
@@ -127,7 +117,7 @@ def make_all_frames(data_list, movie_list):
             warnings.warn(msg, UserWarning)
             continue
 
-      # Open the DUMSES output file
+      # Open the DUMSES output file and repackaged into a SimulationState
       try:
          data = DumsesData(number, filedir=path)
       except IOError:
@@ -135,8 +125,6 @@ def make_all_frames(data_list, movie_list):
             '".  This file will be skipped.'))
          warnings.warn(msg, UserWarning)
          continue
-
-      # Repackage into a SimulationState object
       state = SD.SimulationState(data, si)
 
       # Update the (t == 0) entry if necessary
@@ -163,10 +151,17 @@ def make_all_frames(data_list, movie_list):
       for movie in movie_list.values():
          # Only make frames in the time range
          if movie.time_limits.test(state.t):
-            sys.stdout.write("Making frame {s}{n:06d} (t = {t}).\n".format(
+            sys.stdout.write("Making frame {s}_{n:06d} (t = {t}).\n".format(
                   t=state.t, s=movie.stub, n=number))
             try:
                movie.draw_frame(state, path, number, state0)
+               # Remember the movie and frame information for encoding the
+               # frame images into a single movie
+               if movie.make_movie:
+                  mp, fp = movie.build_paths(path)
+                  mp += ".".join((movie.stub, movie.movie_type))
+                  fp += "*.".join((movie.stub, movie.image_type))
+                  encode_locations.add((mp,fp,movie.fps))
             except (Desc.DescriptorError, SD.SimulationError) as err:
                # Well that didn't work... guess we'll move on
                msg = "".join(("While generating movie ", str(movie),
@@ -175,7 +170,7 @@ def make_all_frames(data_list, movie_list):
                   "\nThis frame will not be drawn."))
                warnings.warn(msg, UserWarning)
          else:
-            sys.stdout.write("Skipping frame {s}{n:06d} (t = {t}).\n".format(
+            sys.stdout.write("Skipping frame {s}_{n:06d} (t = {t}).\n".format(
                   t=state.t, s=movie.stub, n=number))
 
 #==============================================================================

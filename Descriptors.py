@@ -715,7 +715,7 @@ class MovieDescriptor(object):
             raise
 
       # Save the figures
-      image_file_name = "{p}{s}{n:06d}.{e}".format(p=frame_path, s=self.stub,
+      image_file_name = "{p}{s}_{n:06d}.{e}".format(p=frame_path, s=self.stub,
             n=data_num, e=self.image_type)
       fig.savefig(image_file_name, bbox_inches="tight")
       fig.clear()

@@ -7,8 +7,6 @@ does other "outermost loop" tasks of this sort to set up what's
 necessary to run the movie maker.
 """
 
-# TODO : Develop an extensive testing suite
-
 # Python insists that __future__ import(s) should come first
 from __future__ import division
 
@@ -64,7 +62,7 @@ def pretty(d, indent=0):
 
 #==============================================================================
 
-if __name__ == "__main__":
+def main():
 
    # Parse command-line arguments - - - - - - - - - - - - - - - - - - - - - - -
    prog_desc = "Generate a set of movies from DUMSES data files."
@@ -192,15 +190,55 @@ if __name__ == "__main__":
       if ProcID == 0:
          sys.stdout.write("No movies to generate.\n")
    else:
-      make_all_frames(output_list, movies)
+      encode_locations = set()
+      make_all_frames(output_list, movies, encode_locations)
+
+   # Split the movies across the processors
+   if NProcs > 1:
+      pypar.barrier()
+   if ProcID == 0:
+      full_list = sorted(list(encode_locations))
+      if NProcs > 1:
+         Nenc = len(full_list)
+         if NProcs > Nenc:
+            msg = " ".join(("More processors than movies to encode;"
+               "processors {0} through {1} will do no work.".format(
+               Nenc, NProcs-1)))
+            warnings.warn(msg, UserWarning)
+         encode_list = full_list[::NProcs]
+         for i in xrange(1, NProcs):
+            pypar.send(full_list[i::NProcs], destination=i)
+      else:
+         encode_list = full_list
+   else:
+      encode_list = pypar.receive(0)
 
    # Encode the movies
-   # TODO : For every movie that calls for this step, encode the individual
-   #        frame images into a movie.  Need to match the paths for movies and
-   #        frames that are used by the MovieDescriptor.  Also need to figure
-   #        out how to handle multiple data series.
+   for movie_name, frame_regex, fps in encode_list:
+      command = ['mencoder', "mf://"+frame_regex,
+                 '-mf', ":".join(("type=png", "fps={0}".format(fps))),
+                 '-ovc', 'lavc',
+                 '-lavcopts', 'vcodec=mpeg4',
+                 '-oac', 'copy',
+                 '-o', movie_name]
+      sys.stdout.write("Making movie {0}.\n".format(movie_name))
+      try:
+         subprocess.call(command)
+      except OSError as e:
+         if e.errno == os.errno.ENOENT:
+            # Can't find mencoder; warn the user and kill the loop
+            msg = "Cannot locate mencoder to encode frames into movies."
+            warnings.warn(msg, UserWarning)
+            break
+         else:
+            raise
 
    if NProcs > 1:
       pypar.barrier()
       pypar.finalize()
+
+#==============================================================================
+
+if __name__ == "__main__":
+   main()
 
