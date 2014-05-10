@@ -34,7 +34,7 @@ import errno
 import math
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, FuncFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import os
@@ -787,16 +787,6 @@ class MovieDescriptor(object):
          vhi = self.value_limits.hi
 
       # Draw the plot
-      # TODO : Sort out the color scheme.
-      #        Green shows up poorly against white but well against blue and
-      #        okay against red.  Consider the chart here:
-      #        http://webdesign.about.com/od/color/l/bl_contrast_table.htm
-      #        and note that none of the colors shown contrasts well with blue,
-      #        red, and white.  A better idea may be to change the colormap for
-      #        the pseudocolor plot.  For example, yellow and white both
-      #        contrast well with red, blue, grey, and black, so replacing
-      #        white with either grey or black and changing the lines to either
-      #        yellow or white could work.
       image = axes.imshow(plot_data,
             extent=[xx.min(), xx.max(), yy.min(), yy.max()],
             aspect=1.0, cmap=my_cmap, vmin=vlo, vmax=vhi)
@@ -807,7 +797,10 @@ class MovieDescriptor(object):
          axes.contour(xx, yy, x[:,:,0].repeat(y.shape[1],1),
                levels=self.xlines, colors="#00FF00",
                linestyles="dashed")
-      cbar = plt.colorbar(image, cax=cbar_axes)
+      def y_format(x, pos):
+         return "{0:>9.2e}".format(x)
+      formatter = FuncFormatter(y_format)
+      cbar = plt.colorbar(image, cax=cbar_axes, format=formatter)
 
       # Construct the title
       if self.title is None:
@@ -975,6 +968,13 @@ class MovieDescriptor(object):
          vhi = 1.0
       ax_stdv.set_ylim([0.0, vhi])
       ax_stdv.set_xlim([x.min(), x.max()])
+
+      # Adjust tick formatting
+      def y_format(x, pos):
+         return "{0:>9.2e}".format(x)
+      formatter = FuncFormatter(y_format)
+      ax_prof.yaxis.set_major_formatter(formatter)
+      ax_stdv.yaxis.set_major_formatter(formatter)
 
 # End of MovieDescriptor class
 #==============================================================================
