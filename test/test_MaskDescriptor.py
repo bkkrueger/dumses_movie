@@ -1,3 +1,9 @@
+"""
+This module performs a series of tests on the MaskDescriptor object.
+It will not be exhaustive, but it should cover basic usage and catch
+the most glaring errors.
+"""
+
 import unittest
 import copy
 import numpy as np
@@ -8,23 +14,39 @@ from Descriptors import MaskDescriptor, DescriptorError
 from SimulationData import SimulationInput, SimulationState
 
 class MaskDescriptorTest(unittest.TestCase):
+   """
+   Test the MaskDescriptor object.
+   """
 
    def test_construct(self):
+      """
+      Make sure we can build a mask.
+      """
+
+      # Valid values
       good = {"variable"  : "density",
               "mode"      : "pseudocolor: perturbation",
               "threshold" : "19.3",
               "operator"  : "<="}
+      # Invalid values
       bad  = {"mode"      : "profile: mean state",
               "threshold" : "nineteen point three",
               "operator"  : "less than or equal to"}
+
+      # Make sure the good values work
       md = MaskDescriptor(good)
 
+      # Make sure the bad values don't work
       for k in bad.keys():
          pdict = copy.copy(good)
          pdict[k] = bad[k]
          self.assertRaises(DescriptorError, MaskDescriptor, pdict)
 
    def test_apply(self):
+      """
+      Make sure we can apply a mask.
+      """
+
       si = SimulationInput("input_allvalues")
 
       class A(object):

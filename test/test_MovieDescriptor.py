@@ -1,3 +1,9 @@
+"""
+This module performs a series of tests on the MovieDescriptor object.
+It will not be exhaustive, but it should cover basic usage and catch
+the most glaring errors.
+"""
+
 import unittest
 import copy
 import numpy as np
@@ -8,8 +14,14 @@ from Descriptors import MovieDescriptor, MaskDescriptor, DescriptorError
 from SimulationData import SimulationInput, SimulationState
 
 class MovieDescriptorTest(unittest.TestCase):
+   """
+   Test the MovieDescriptor object.
+   """
 
    def test_construct(self):
+      """
+      Can we construct a MovieDescriptor?
+      """
 
       # This should construct a valid movie
       params = {"title" : "title",
@@ -249,6 +261,11 @@ class MovieDescriptorTest(unittest.TestCase):
 
 
    def test_frame_data_3D(self):
+      """
+      Test the frame_data_3D routine, which extracts some data and may
+      do some processing.
+      """
+
       params = {"title" : "title",
                 "stub" : "stub",
                 "path" : "path",

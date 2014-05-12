@@ -203,7 +203,7 @@ class SimulationInput(object):
       return self.dens_up * self.csnd_up**2 / self.gamma
 
    #===========================================================================
-   def _shape_function(self, x, y, z):
+   def shape_function(self, x, y, z):
       """
       Compute the shape function.
 
@@ -262,7 +262,7 @@ class SimulationInput(object):
 
       grav_coef = - self.K_grav *  self.csnd_up**2 / self.layer_width
       grav = np.zeros((x.shape[0], y.shape[1], z.shape[2], 3), dtype=float)
-      grav[...,0] = grav_coef * self._shape_function(x,y,z)
+      grav[...,0] = grav_coef * self.shape_function(x,y,z)
 
       return grav
 
@@ -293,7 +293,7 @@ class SimulationInput(object):
 
       heat_coef = (self.K_heat * (self.mach_up * self.csnd_up**3) /
             (self.layer_width * self.gamma))
-      return (heat_coef * density * self._shape_function(x, y, z))
+      return (heat_coef * density * self.shape_function(x, y, z))
 
 # End class SimulationInput
 #==============================================================================
@@ -374,6 +374,20 @@ class SimulationState(object):
    the standard DumsesData class (e.g. the names of variables, or if I
    find time to update this to be parallel so that I can visualize
    large simulations that would fill the memory on a single core).
+
+   An important note on DumsesData: It is not actually necessary to supply a
+   DumsesData (think duck typing).  Instead the object passed in for a
+   DumsesData requires the following:
+   -- t: A floating-point value for the time
+   -- x: A 1D array of cell-centered x-coordinates (length Nx)
+   -- y: A 1D array of cell-centered y-coordinates (length Ny)
+   -- z: A 1D array of cell-centered z-coordinates (length Nz)
+   -- rho: A 3D array for mass density (Nx x Ny x Nz)
+   -- rhou: A 4D array for momentum density vector (Nx x Ny x Nz x 3)
+   -- E: A 3D array for total energy density (Nx x Ny x Nz)
+   -- rho0: A 1D array for base state mass density (length Nx)
+   -- rhou0: A 1D array for base state momentum density (length Ny)
+   -- E0: A 1D array for base state total energy density (length Nz)
 
    Attributes:
       __initialized (bool) : is the object initialized
@@ -619,7 +633,7 @@ class SimulationState(object):
          whatever arises from functions called by this routine
       """
 
-      # Extract and check values
+      # Extract values
       params = input_parameters
 
       t = dumpy.time

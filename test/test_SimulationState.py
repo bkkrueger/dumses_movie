@@ -1,3 +1,9 @@
+"""
+This module performs a series of tests on the SimulationState object.
+It will not be exhaustive, but it should cover basic usage and catch
+the most glaring errors.
+"""
+
 from __future__ import division
 import unittest
 import numpy as np
@@ -7,21 +13,18 @@ import site_setup
 from SimulationData import SimulationInput, SimulationError, SimulationState
 
 class SimulationStateTest(unittest.TestCase):
+   """
+   Test the SimulationState object.
+   """
 
    def test_construction(self):
+      """
+      Test the construction of a SimulationState.
+      """
+
       si = SimulationInput("input_allvalues")
 
-      # Note : SimulationState doesn't actually require a DumsesData, but only
-      #        something that meets the following criteria:
-      #        -- Attributes: time, x, y, z, rho, rhou, E, rho0, rhou0, E0
-      #        -- time should be a scalar
-      #        -- coordinate arrays x, y, z should be 1D arrays
-      #        -- rho, E should be 3D arrays that match the lengths of the
-      #           coordinate arrays
-      #        -- rhou should be a 4D array with the first three dimensions
-      #           matching the coordinate arrays and the last having length 3
-      #        -- rho0, rhou0, E0 should be 1D arrays that match the length of
-      #           the x-coordinate array
+      # Make a fake "DumsesData"-like object
       class A(object):
          pass
       data = A()
@@ -43,25 +46,22 @@ class SimulationStateTest(unittest.TestCase):
       ss = SimulationState(data, si)
 
    def test_uninitialized(self):
+      """
+      Test thet an uninitialized SimulationData raises an error when
+      asked to construct a variable. 
+      """
       si = SimulationInput()
       ss = SimulationState()
 
-      self.assertRaises(SimulationError, ss.extract, "variable")
+      self.assertRaises(SimulationError, ss.extract, "density")
 
    def test_variables(self):
+      """
+      Test that all the variables extract.
+      """
       si = SimulationInput("input_allvalues")
 
-      # Note : SimulationState doesn't actually require a DumsesData, but only
-      #        something that meets the following criteria:
-      #        -- Attributes: time, x, y, z, rho, rhou, E, rho0, rhou0, E0
-      #        -- time should be a scalar
-      #        -- coordinate arrays x, y, z should be 1D arrays
-      #        -- rho, E should be 3D arrays that match the lengths of the
-      #           coordinate arrays
-      #        -- rhou should be a 4D array with the first three dimensions
-      #           matching the coordinate arrays and the last having length 3
-      #        -- rho0, rhou0, E0 should be 1D arrays that match the length of
-      #           the x-coordinate array
+      # Make a fake "DumsesData"-like object
       class A(object):
          pass
       data = A()
@@ -79,13 +79,17 @@ class SimulationStateTest(unittest.TestCase):
       data.rhou0 = np.ones(Nx)
       data.E0 = np.ones(Nx)
 
-      # Make sure the construction works
       ss = SimulationState(data, si)
 
+      # Make sure the extraction works, and also check that the results are the
+      # right size
       for v in ss.known_variables:
          self.assertSequenceEqual(ss.extract(v).shape, (Nx, Ny, Nz))
 
    def test_calculation(self):
+      """
+      Ensure the correct relations among the variables.
+      """
       si = SimulationInput("input_allvalues")
 
       class A(object):
@@ -289,6 +293,9 @@ class SimulationStateTest(unittest.TestCase):
             "lower bound")
 
    def all_nearly_equal(self, npa1, npa2):
+      """
+      Support function to make sure the data arrays are equal.
+      """
       self.assertEqual(len(npa1.shape), len(npa2.shape),
             msg="Mismatching shapes: ({0}, {1}).".format(len(npa1.shape),
             len(npa2.shape)))
