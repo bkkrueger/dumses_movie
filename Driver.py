@@ -184,6 +184,8 @@ def main():
          sys.stdout.flush()
       if NProcs > 1:
          pypar.barrier()
+   if ProcID == 0:
+      print "="*79
 
    # Call the primary loop
    if len(movies) == 0:
@@ -212,6 +214,23 @@ def main():
          encode_list = full_list
    else:
       encode_list = pypar.receive(0)
+
+   # Summarize movies to encode
+   if ProcID == 0:
+      print "="*79
+   if NProcs > 1:
+      pypar.barrier()
+   for i in xrange(NProcs):
+      if i == ProcID:
+         print "Processor {p} has {n} movies to encode:".format(p=ProcID,
+               n=len(encode_list))
+         for o in encode_list:
+            print "    {0}".format(o[0])
+         sys.stdout.flush()
+      if NProcs > 1:
+         pypar.barrier()
+   if ProcID == 0:
+      print "="*79
 
    # Encode the movies
    for movie_name, frame_regex, fps in encode_list:

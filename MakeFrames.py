@@ -42,46 +42,45 @@ def make_all_frames(data_list, movie_list, encode_locations):
    # Set up checks - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
    # Ensure all movies have unique stubs
-   list_of_stubs = []   # stubs we've seen
-   s_blacklist = set()  # stubs to remove
+   list_of_pathstubs = []  # pathstubs we've seen
+   blacklist = set()       # pathstubs to remove
 
    for movie in movie_list.values():
-      if movie.stub in list_of_stubs:
-         if movie.stub not in s_blacklist: # Only warn once per repeated stub
-            msg = "".join(("Multiple movies with stub ", movie.stub,
+      if movie.pathstub in list_of_pathstubs:
+         if movie.pathstub not in blacklist: # Only warn once per repeated stub
+            msg = '"'.join(("Multiple movies with path/stub ", movie.pathstub,
                ".  These will be excluded."))
             warnings.warn(msg, UserWarning)
-         s_blacklist.add(movie.stub)
+         blacklist.add(movie.pathstub)
       else:
-         list_of_stubs.append(movie.stub)
+         list_of_pathstubs.append(movie.pathstub)
 
    movie_list = {m : movie_list[m] for m in movie_list
-         if movie_list[m].stub not in s_blacklist}
+         if movie_list[m].pathstub not in blacklist}
 
    # Split the loops because these steps apply only to movies we actually
    # intend to generate
-   profile_mode = False
+   save_initial_state = False
    for movie in movie_list.values():
 
       # Do any of the surviving movies need the initial state?
       if movie.mode.dimension == 1:
-         profile_mode = True
+         save_initial_state = True
 
       # If any of the movies have absolute paths (allowed in general for the
-      # MovieDescriptor, because it is not tied to this set of drawing
-      # routines), warn the user that multiple data series may overwrite or
-      # interleave.
+      # MovieDescriptor, because it is not tied to this control loop, warn the
+      # user that multiple data series may overwrite or interleave.
       if os.path.isabs(movie.path):
          msg = " ".join(("Absolute paths may cause overwriting and/or",
             "interleaving if you have multiple data series."))
          warnings.warn(msg, UserWarning)
 
    # Sorting makes it more likely that you'll hit the initial state before the
-   # other states in the same series, thus potentially saving the need to dump
-   # and reload different initial states all the time in a poorly-ordered list.
+   # other states in the same series, and less likely that you'll switch
+   # between series and then back, thus potentially saving the need to dump and
+   # reload different initial states all the time in a poorly-ordered list.
    data_list.sort()
 
-   # If needed, save the initial state for the current series
    state0 = None
    series_name = None
 
@@ -117,7 +116,7 @@ def make_all_frames(data_list, movie_list, encode_locations):
             warnings.warn(msg, UserWarning)
             continue
 
-      # Open the DUMSES output file and repackaged into a SimulationState
+      # Open the DUMSES output file and repackage into a SimulationState
       try:
          data = DumsesData(number, filedir=path)
       except IOError:
@@ -125,10 +124,16 @@ def make_all_frames(data_list, movie_list, encode_locations):
             '".  This file will be skipped.'))
          warnings.warn(msg, UserWarning)
          continue
-      state = SD.SimulationState(data, si)
+      try:
+         state = SD.SimulationState(data, si)
+      except SD.SimulationError:
+         msg = "".join(('Unable to construct state from data file "',
+            output_name, '".  This file will be skipped.'))
+         warnings.warn(msg, UserWarning)
+         continue
 
       # Update the (t == 0) entry if necessary
-      if profile_mode and series_name != path:
+      if save_initial_state and series_name != path:
          if state.t == 0:
             # If we just opened the t == 0 file, then everything is easy
             state0 = state
@@ -155,15 +160,15 @@ def make_all_frames(data_list, movie_list, encode_locations):
                   t=state.t, s=movie.stub, n=number))
             try:
                movie.draw_frame(state, path, number, state0)
-               # Remember the movie and frame information for encoding the
-               # frame images into a single movie
+               # Save the movie and frame information for encoding the frame
+               # images into a single movie.
                if movie.make_movie:
                   mp, fp = movie.build_paths(path)
                   mp += ".".join((movie.stub, movie.movie_type))
                   fp += "*.".join((movie.stub, movie.image_type))
                   encode_locations.add((mp,fp,movie.fps))
             except (Desc.DescriptorError, SD.SimulationError) as err:
-               # Well that didn't work... guess we'll move on
+               # Well that didn't work... guess we'll move along
                msg = "".join(("While generating movie ", str(movie),
                   " with data file ", output_name,
                   ", the following error occurred:\n   ", str(err),

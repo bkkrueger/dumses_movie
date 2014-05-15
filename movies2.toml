@@ -18,3 +18,12 @@
    fps = 20
    final_pause = "0.35s"
 
+[movies.profile6_copy]
+   stub = "prof6"
+   path = "movies/test"
+   variable = "pressure"
+   mode = "profile: contrast"
+   image_type = "png"
+   fps = 20
+   movie_type = "avi"
+

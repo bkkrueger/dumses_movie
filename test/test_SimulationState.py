@@ -95,46 +95,40 @@ class SimulationStateTest(unittest.TestCase):
       class A(object):
          pass
       data = A()
-      Nx = 5
-      Ny = 3
-      Nz = 1
+      Nx = 7
+      Ny = 5
+      Nz = 3
       data.time = 15.3
-      data.x = (np.arange(Nx, dtype=float) - Nx//2) * 0.75
-      data.y = (np.arange(Ny, dtype=float) - Ny//2) * 0.75
-      data.z = (np.arange(Nz, dtype=float) - Nz//2) * 0.75
-      dens = np.empty((Nx, Ny, Nz))
-      dens[:,0,0] = [1.0, 1.1, 1.2, 1.3, 1.4]
-      dens[:,1,0] = [1.0, 1.1, 1.2, 1.3, 1.4]
-      dens[:,2,0] = [1.0, 1.1, 1.2, 1.3, 1.4]
-      eint = np.empty((Nx, Ny, Nz))
-      eint[:,0,0] = [2.4, 2.3, 2.2, 2.1, 2.0]
-      eint[:,1,0] = [2.4, 2.3, 2.2, 2.1, 2.0]
-      eint[:,2,0] = [2.4, 2.3, 2.2, 2.1, 2.0]
-      velx = np.empty((Nx, Ny, Nz))
-      velx[:,0,0] = [0.1, 0.2, 0.3, 0.2, 0.1]
-      velx[:,1,0] = [0.3, 0.4, 0.5, 0.4, 0.3]
-      velx[:,2,0] = [0.5, 0.6, 0.7, 0.8, 0.9]
-      vely = np.empty((Nx, Ny, Nz))
-      vely[:,0,0] = [0.1, 0.2, 0.3, 0.2, 0.1]
-      vely[:,1,0] = [0.3, 0.4, 0.5, 0.4, 0.3]
-      vely[:,2,0] = [0.5, 0.6, 0.7, 0.8, 0.9]
-      velz = np.zeros((Nx, Ny, Nz))
+      x = (np.arange(Nx, dtype=float) - Nx//2) * 0.75
+      y = (np.arange(Ny, dtype=float) - Ny//2) * 0.75
+      z = (np.arange(Nz, dtype=float) - Nz//2) * 0.75
+      data.x = x
+      data.y = y
+      data.z = z
+      dens = np.random.rand(Nx, Ny, Nz) + 0.1
+      eint = np.random.rand(Nx, Ny, Nz) + 0.1
+      velx = np.random.rand(Nx, Ny, Nz) - 0.5
+      vely = np.random.rand(Nx, Ny, Nz) - 0.5
+      velz = np.random.rand(Nx, Ny, Nz) - 0.5
       data.rho = dens
       data.rhou = np.empty((Nx, Ny, Nz, 3))
       data.rhou[...,0] = dens * velx
       data.rhou[...,1] = dens * vely
       data.rhou[...,2] = dens * velz
       data.E = dens * (eint + 0.5 * (velx**2 + vely**2 + velz**2))
-      dens0 = dens[:,1,0]
-      velx0 = velx[:,1,0]
-      eint0 = eint[:,1,0]
+      dens0 = np.random.rand(Nx) + 0.1
+      eint0 = np.random.rand(Nx) + 0.1
+      velx0 = np.random.rand(Nx) - 0.5
       zero0 = np.zeros_like(velx0)
       data.rho0 = dens0
       data.rhou0 = dens0 * velx0
       data.E0 = dens0 * (eint0 + 0.5 * velx0**2)
-      dens0 = dens0.reshape((dens.shape[0],1,1)).repeat(3, axis=1)
-      velx0 = velx0.reshape((dens.shape[0],1,1)).repeat(3, axis=1)
-      eint0 = eint0.reshape((dens.shape[0],1,1)).repeat(3, axis=1)
+      dens0 = dens0.reshape((dens.shape[0],1,1)).repeat(Ny, axis=1).repeat(Nz,
+            axis=2)
+      velx0 = velx0.reshape((dens.shape[0],1,1)).repeat(Ny, axis=1).repeat(Nz,
+            axis=2)
+      eint0 = eint0.reshape((dens.shape[0],1,1)).repeat(Ny, axis=1).repeat(Nz,
+            axis=2)
       zero0 = np.zeros((Nx, Ny, Nz))
 
       # Make sure the construction works
@@ -186,20 +180,77 @@ class SimulationStateTest(unittest.TestCase):
       self.assertEqual(ss.known_variables["velocity magnitude"].zero,
             "lower bound")
 
-      # TODO : vorticity (x, y, z, magnitude)
+      # boundary conditions: x-bounds are zero-gradient, y & z are periodic
+      dvy_dx = np.empty_like(vely)
+      dvy_dx[ 0  ,:,:] = 0.0
+      dvy_dx[1:-1,:,:] = ((vely[2:,:,:] - vely[:-2,:,:]) /
+            (x[2:,None,None] - x[:-2,None,None]))
+      dvy_dx[ -1 ,:,:] = 0.0
+
+      dvz_dx = np.empty_like(velz)
+      dvz_dx[ 0  ,:,:] = 0.0
+      dvz_dx[1:-1,:,:] = ((velz[2:,:,:] - velz[:-2,:,:]) /
+            (x[2:,None,None] - x[:-2,None,None]))
+      dvz_dx[ -1 ,:,:] = 0.0
+
+      dvx_dy = np.empty_like(velx)
+      dvx_dy[:, 0  ,:] = (velx[:, 1,:] - velx[:,-1 ,:]) / ((y[ 1] - y[ 0 ])*2)
+      dvx_dy[:,1:-1,:] = ((velx[:,2:,:] - velx[:,:-2,:]) /
+            (y[None,2:,None] - y[None,:-2,None]))
+      dvx_dy[:, -1 ,:] = (velx[:, 0,:] - velx[:,-2 ,:]) / ((y[-1] - y[-2 ])*2)
+
+      dvz_dy = np.empty_like(velz)
+      dvz_dy[:, 0  ,:] = (velz[:, 1,:] - velz[:,-1 ,:]) / ((y[ 1] - y[ 0 ])*2)
+      dvz_dy[:,1:-1,:] = ((velz[:,2:,:] - velz[:,:-2,:]) /
+            (y[None,2:,None] - y[None,:-2,None]))
+      dvz_dy[:, -1 ,:] = (velz[:, 0,:] - velz[:,-2 ,:]) / ((y[-1] - y[-2 ])*2)
+
+      dvx_dz = np.empty_like(velx)
+      dvx_dz[:,:, 0  ] = (velx[:,:, 1] - velx[:,:,-1 ]) / ((z[ 1] - z[ 0 ])*2)
+      dvx_dz[:,:,1:-1] = ((velx[:,:,2:] - velx[:,:,:-2]) /
+            (z[None,None,2:] - z[None,None,:-2]))
+      dvx_dz[:,:, -1 ] = (velx[:,:, 0] - velx[:,:,-2 ]) / ((z[-1] - z[-2 ])*2)
+
+      dvy_dz = np.empty_like(vely)
+      dvy_dz[:,:, 0  ] = (vely[:,:, 1] - vely[:,:,-1 ]) / ((z[ 1] - z[ 0 ])*2)
+      dvy_dz[:,:,1:-1] = ((vely[:,:,2:] - vely[:,:,:-2]) /
+            (z[None,None,2:] - z[None,None:-2]))
+      dvy_dz[:,:, -1 ] = (vely[:,:, 0] - vely[:,:,-2 ]) / ((z[-1] - z[-2 ])*2)
+
+      vrtx = dvz_dy - dvy_dz
+      self.all_nearly_equal(vrtx, ss.extract("x vorticity"))
       self.assertEqual(ss.known_variables["x vorticity"].zero, "center")
+
+      vrty = dvx_dz - dvz_dx
+      self.all_nearly_equal(vrty, ss.extract("y vorticity"))
       self.assertEqual(ss.known_variables["y vorticity"].zero, "center")
+
+      vrtz = dvy_dx - dvx_dy
+      self.all_nearly_equal(vrtz, ss.extract("z vorticity"))
       self.assertEqual(ss.known_variables["z vorticity"].zero, "center")
+
+      wmag = np.sqrt(vrtx**2 + vrty**2 + vrtz**2)
+      self.all_nearly_equal(wmag, ss.extract("vorticity magnitude"))
       self.assertEqual(ss.known_variables["vorticity magnitude"].zero,
             "lower bound")
 
-      # TODO : specific vorticity (x, y, z, magnitude)
+      svrx = vrtx / dens
+      self.all_nearly_equal(svrx, ss.extract("specific x vorticity"))
       self.assertEqual(ss.known_variables["specific x vorticity"].zero,
             "center")
+
+      svry = vrty / dens
+      self.all_nearly_equal(svry, ss.extract("specific y vorticity"))
       self.assertEqual(ss.known_variables["specific y vorticity"].zero,
             "center")
+
+      svrz = vrtz / dens
+      self.all_nearly_equal(svrz, ss.extract("specific z vorticity"))
       self.assertEqual(ss.known_variables["specific z vorticity"].zero,
             "center")
+
+      swmg = wmag / dens
+      self.all_nearly_equal(swmg, ss.extract("specific vorticity magnitude"))
       self.assertEqual(ss.known_variables["specific vorticity magnitude"].zero,
             "lower bound")
 
@@ -274,13 +325,6 @@ class SimulationStateTest(unittest.TestCase):
       self.all_nearly_equal(vmag0 / csnd0, ss.extract("Mach number", False))
       self.assertEqual(ss.known_variables["Mach number"].zero, "lower bound")
 
-      self.all_nearly_equal(eint + pres / dens,
-            ss.extract("specific enthalpy"))
-      self.all_nearly_equal(eint0 + pres0 / dens0,
-            ss.extract("specific enthalpy"))
-      self.assertEqual(ss.known_variables["specific enthalpy"].zero,
-            "lower bound")
-
       self.all_nearly_equal(dens * eint + pres,
             ss.extract("enthalpy density"))
       self.all_nearly_equal(dens0 * eint0 + pres0,
@@ -288,7 +332,33 @@ class SimulationStateTest(unittest.TestCase):
       self.assertEqual(ss.known_variables["enthalpy density"].zero,
             "lower bound")
 
-      # TODO : convective growth rate
+      self.all_nearly_equal(eint + pres / dens,
+            ss.extract("specific enthalpy"))
+      self.all_nearly_equal(eint0 + pres0 / dens0,
+            ss.extract("specific enthalpy", False))
+      self.assertEqual(ss.known_variables["specific enthalpy"].zero,
+            "lower bound")
+
+      grad_s = np.empty((Nx,Ny,Nz,3))
+      grad_s[ 0  ,:,:,0] = 0.0
+      grad_s[1:-1,:,:,0] = ((entr[2:,:,:] - entr[:-2,:,:]) /
+            (x[2:,None,None] - x[:-2,None,None]))
+      grad_s[ -1 ,:,:,0] = 0.0
+      grad_s[:, 0  ,:,1] = (entr[:, 1,:] - entr[:,-1 ,:]) / ((y[ 1] - y[ 0 ])*2)
+      grad_s[:,1:-1,:,1] = ((entr[:,2:,:] - entr[:,:-2,:]) /
+            (y[None,2:,None] - y[None,:-2,None]))
+      grad_s[:, -1 ,:,1] = (entr[:, 0,:] - entr[:,-2 ,:]) / ((y[-1] - y[-2 ])*2)
+      grad_s[:,:, 0  ,2] = (entr[:,:, 1] - entr[:,:,-1 ]) / ((z[ 1] - z[ 0 ])*2)
+      grad_s[:,:,1:-1,2] = ((entr[:,:,2:] - entr[:,:,:-2]) /
+            (z[None,None,2:] - z[None,None:-2]))
+      grad_s[:,:, -1 ,2] = (entr[:,:, 0] - entr[:,:,-2 ]) / ((z[-1] - z[-2 ])*2)
+
+      grav = ss.params.gravity(ss.x, ss.y, ss.z)
+      g_grad_s = np.sum(grav * grad_s, axis=-1)
+      wbv2 = g_grad_s * (ss.params.gamma - 1) / ss.params.gamma
+      wbv2[wbv2 > 0] = 0
+      w_bv = np.sqrt(-wbv2)
+      self.all_nearly_equal(w_bv, ss.extract("Brunt-Vaisala frequency"))
       self.assertEqual(ss.known_variables["convective growth rate"].zero,
             "lower bound")
 

@@ -362,6 +362,7 @@ class MovieDescriptor(object):
       title (string) : title for top of frames (or None for default)
       stub (string) : the stub of the output files (images and movie)
       path (string) : the path to where the movie will be saved
+      pathstub (string) : property to merge path and stub
       image_type (string) : the extension for the image files
       variable (string) : the variable to be plotted
       mode (ModeDescriptor) : the mode for computing the variable
@@ -376,6 +377,15 @@ class MovieDescriptor(object):
       mask_method (string) : how to apply the masks
       xlines (list of floats) : list of x-positions to mark with lines
    """
+
+   #===========================================================================
+   @property
+   def pathstub(self):
+      if self.path[-1] == "/":
+         j = ""
+      else:
+         j = "/"
+      return j.join((self.path, self.stub))
 
    #===========================================================================
    def __repr__(self):
