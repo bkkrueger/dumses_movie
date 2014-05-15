@@ -426,7 +426,7 @@ class SimulationState(object):
       Supply a simple representation of the class.
       """
       if self.__initialized:
-         string = "Simulation data at t = {0:13.6e}".format(t=self.t)
+         string = "Simulation data at t = {0:13.6e}".format(self.t)
       else:
          string = "Simulation data (uninitialized)"
       return string

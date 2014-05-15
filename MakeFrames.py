@@ -19,8 +19,8 @@ import sys
 import warnings
 
 from dumpy_v05.data.rd_dumses import DumsesData
-import Descriptors as Desc
-import SimulationData as SD
+from Descriptors import DescriptorError
+from SimulationData import SimulationError, SimulationInput, SimulationState
 
 #==============================================================================
 
@@ -70,7 +70,7 @@ def make_all_frames(data_list, movie_list, encode_locations):
       # If any of the movies have absolute paths (allowed in general for the
       # MovieDescriptor, because it is not tied to this control loop, warn the
       # user that multiple data series may overwrite or interleave.
-      if os.path.isabs(movie.path):
+      if movie.path is not None and os.path.isabs(movie.path):
          msg = " ".join(("Absolute paths may cause overwriting and/or",
             "interleaving if you have multiple data series."))
          warnings.warn(msg, UserWarning)
@@ -108,7 +108,7 @@ def make_all_frames(data_list, movie_list, encode_locations):
       # Update the inputs file if necessary
       if series_name != path:
          try:
-            si = SD.SimulationInput(path + "input")
+            si = SimulationInput(path + "input")
          except IOError:
             msg = "".join((
                'Unable to open inputs file corresponding to data file "',
@@ -125,8 +125,8 @@ def make_all_frames(data_list, movie_list, encode_locations):
          warnings.warn(msg, UserWarning)
          continue
       try:
-         state = SD.SimulationState(data, si)
-      except SD.SimulationError:
+         state = SimulationState(data, si)
+      except SimulationError:
          msg = "".join(('Unable to construct state from data file "',
             output_name, '".  This file will be skipped.'))
          warnings.warn(msg, UserWarning)
@@ -142,7 +142,7 @@ def make_all_frames(data_list, movie_list, encode_locations):
             # We need to open the t == 0 file for this series
             try:
                data0 = DumsesData(0, filedir=path)
-               state0 = SD.SimulationState(data0, si)
+               state0 = SimulationState(data0, si)
                series_name = path
             except IOError:
                # Problem opening file; skip all the t == 0 stuff when plotting
@@ -167,7 +167,7 @@ def make_all_frames(data_list, movie_list, encode_locations):
                   mp += ".".join((movie.stub, movie.movie_type))
                   fp += "*.".join((movie.stub, movie.image_type))
                   encode_locations.add((mp,fp,movie.fps))
-            except (Desc.DescriptorError, SD.SimulationError) as err:
+            except (DescriptorError, SimulationError) as err:
                # Well that didn't work... guess we'll move along
                msg = "".join(("While generating movie ", str(movie),
                   " with data file ", output_name,

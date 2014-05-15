@@ -381,11 +381,13 @@ class MovieDescriptor(object):
    #===========================================================================
    @property
    def pathstub(self):
-      if self.path[-1] == "/":
-         j = ""
+      if self.path is None:
+         pathstub = self.stub
+      elif self.path[-1] == "/":
+         pathstub = "".join((self.path, self.stub))
       else:
-         j = "/"
-      return j.join((self.path, self.stub))
+         pathstub = "/".join((self.path, self.stub))
+      return pathstub
 
    #===========================================================================
    def __repr__(self):
