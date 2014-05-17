@@ -18,6 +18,7 @@ except ImportError:
 
 import argparse as ap
 import glob
+import os
 import tomlpython as toml
 import subprocess
 import sys
@@ -49,20 +50,10 @@ else:
    ProcID = pypar.rank()
 #==============================================================================
 
-def pretty(d, indent=0):
+def process_command_line(argv=None):
    """
-   Pretty-printing for nested dictionaries; convenient for testing.
+   Parse command-line arguments.
    """
-   for key, value in d.iteritems():
-      print '   ' * indent + str(key)
-      if isinstance(value, dict):
-         pretty(value, indent+1)
-      else:
-         print '   ' * (indent+1) + str(value)
-
-#==============================================================================
-
-def main():
 
    # Parse command-line arguments - - - - - - - - - - - - - - - - - - - - - - -
    prog_desc = "Generate a set of movies from DUMSES data files."
@@ -82,37 +73,30 @@ def main():
    parser.add_argument("--movies", metavar="MOVIE", nargs="+",
          dest="movie_list", help="list of IDs of movies to create")
 
-   args = parser.parse_args()
+   if argv is None:
+      args = parser.parse_args()
+   else:
+      args = parser.parse_args(argv)
 
    # Because some components assume that the directory path ends with "/"
    if args.directory[-1] is not "/":
       args.directory += "/"
 
-   # Set up - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   return args.directory, args.dfile_list, args.movie_list
 
-   # Generate the list of DUMSES outputs to plot.
-   if ProcID == 0:
-      full_list = sorted(glob.glob(args.directory + "output_*"))
-      if NProcs > 1:
-         Nout = len(full_list)
-         if NProcs > Nout:
-            msg = " ".join(("More processors than output files; processors",
-               "{0} through {1} will do no work.".format(Nout, NProcs-1)))
-            warnings.warn(msg, UserWarning)
-         output_list = full_list[::NProcs]
-         for i in xrange(1, NProcs):
-            pypar.send(full_list[i::NProcs], destination=i)
-      else:
-         output_list = full_list
-   else:
-      output_list = pypar.receive(0)
+#==============================================================================
+
+def build_descriptors(dfile_list, movie_list):
+   """
+   Build the mask and movie descriptors.
+   """
 
    # Get the movie and mask descriptions
    movie_descriptions = {}
    movie_blacklist = set()
    mask_descriptions = {}
    mask_blacklist = set()
-   for dfile in args.dfile_list:
+   for dfile in dfile_list:
       with open(dfile) as tomlfile:
          d = toml.parse(tomlfile)
          # Make sure movies are not redundant
@@ -152,48 +136,79 @@ def main():
    #    in the movies file.
    movies = {}
    for name, movie_string in movie_descriptions.items():
-      if args.movie_list is None or name in args.movie_list:
+      if movie_list is None or name in movie_list:
          movies[name] = Desc.MovieDescriptor(movie_string, masks)
-   if args.movie_list is not None:
-      for m in args.movie_list:
+   if movie_list is not None:
+      for m in movie_list:
          if m not in movies:
             msg = '"'.join(('Requested movie ', m, ' not found.'))
             warnings.warn(msg, UserWarning)
 
-   # Summarize masks and movies
-   if ProcID == 0:
-      print "="*79
-      print "found {n} masks:".format(n=len(masks))
-      for name, mask in sorted(masks.items()):
-         print "   {0}:".format(name), mask
-      print "making {n} movies:".format(n=len(movies))
-      for name, movie in sorted(movies.items()):
-         print "   {0}:".format(name), movie
-      print "="*79
-      sys.stdout.flush()
+   return masks, movies
 
-   # Summarize outputs list
+#==============================================================================
+
+def get_data_list(directory):
+   """
+   Get the list of data files to visualize and distribute across processors.
+   """
+
+   if ProcID == 0:
+      # Find all the data files in the directory
+      full_list = sorted(glob.glob(directory + "output_*"))
+
+      # Share them among all the processors
+      if NProcs > 1:
+         Nout = len(full_list)
+         if NProcs > Nout:
+            msg = " ".join(("More processors than output files; processors",
+               "{0} through {1} will do no work.".format(Nout, NProcs-1)))
+            warnings.warn(msg, UserWarning)
+         output_list = full_list[::NProcs]
+         for i in xrange(1, NProcs):
+            pypar.send(full_list[i::NProcs], destination=i)
+      else:
+         output_list = full_list
+   else:
+      output_list = pypar.receive(0)
+
+   return output_list
+
+#==============================================================================
+
+def assign_movies(encode_locations):
+   """
+   Distribute the movies to be encoded among the processors available.
+   """
+
+   # Merge the set of movies to processor zero
+   # -- The structure of the code suggests that, in many cases, all processors
+   #    will have identical copies of encode_locations prior to this step.
+   #    However, that is not guaranteed.  Consider, for example, running this
+   #    script on 10 processors with 10 data files, and one of the movies has a
+   #    time window that excludes the first 5 data files: processors 0..4 will
+   #    not know about that movie unless informed by processors 5..9.
+   # -- Make sure they send in-order.  PyPar documentation is a bit thin on the
+   #    ground, so I have not yet determined whether or not PyPar's send and
+   #    receive are nonblocking.  Other methods (e.g. gather) could also be
+   #    used, and would arguably improve performance, but until I find better
+   #    PyPar documentation, this will suffice.  And this is absolutely not
+   #    even close to a performance-critical operation; the vast majority of
+   #    the computing time is spent generating the frames, while communication
+   #    is almost negligible.  Hence why I've spent my time on other
+   #    components, rather than looking for better PyPar documentation.
    if NProcs > 1:
       pypar.barrier()
-   for i in xrange(NProcs):
-      if i == ProcID:
-         print "Processor {p} has {n} output files:".format(p=ProcID,
-               n=len(output_list))
-         for o in output_list:
-            print "    {0}".format(o)
-         sys.stdout.flush()
-      if NProcs > 1:
-         pypar.barrier()
    if ProcID == 0:
-      print "="*79
-
-   # Call the primary loop
-   if len(movies) == 0:
-      if ProcID == 0:
-         sys.stdout.write("No movies to generate.\n")
+      for i in xrange(1, NProcs):
+         temp_set = pypar.receive(i)
+         encode_locations.update(temp_set)
+         pypar.barrier()
    else:
-      encode_locations = set()
-      make_all_frames(output_list, movies, encode_locations)
+      for i in xrange(1, NProcs):
+         if ProcID == i:
+            pypar.send(encode_locations, destination=0)
+         pypar.barrier()
 
    # Split the movies across the processors
    if NProcs > 1:
@@ -215,6 +230,98 @@ def main():
    else:
       encode_list = pypar.receive(0)
 
+   return encode_list
+
+#==============================================================================
+
+# TODO : Does this belong in Driver or in MakeFrames (which would then have to
+#        be renamed)?
+def encode_movies(encode_list):
+   """
+   Encode the movies given.
+   """
+
+   # Encode the movies
+   if ProcID == 0:
+      print "="*79
+   for movie_name, frame_regex, fps in encode_list:
+      log_name = os.path.splitext(movie_name)[0] + ".log"
+      with open(log_name, 'w') as log_file:
+         command = ['mencoder', "mf://"+frame_regex,
+                    '-mf', ":".join(("type=png", "fps={0}".format(fps))),
+                    '-ovc', 'lavc',
+                    '-lavcopts', 'vcodec=mpeg4',
+                    '-oac', 'copy',
+                    '-o', movie_name]
+         sys.stdout.write("Making movie {0}.\n".format(movie_name))
+         try:
+            subprocess.call(command, stdout=log_file, stderr=log_file)
+         except OSError as e:
+            if e.errno == os.errno.ENOENT:
+               # Can't find mencoder; warn the user and kill the loop
+               msg = "Cannot locate mencoder to encode frames into movies."
+               warnings.warn(msg, UserWarning)
+               break
+            else:
+               raise
+
+#==============================================================================
+
+def main():
+   """
+   Main driver function.
+   """
+
+   # Set up - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+   # Parse the command-line arguments
+   directory, dfile_list, movie_list = process_command_line(sys.argv[1:])
+
+   # Build the MaskDescriptors and MovieDescriptors
+   masks, movies = build_descriptors(dfile_list, movie_list)
+
+   # Summarize masks and movies
+   if ProcID == 0:
+      print "="*79
+      print "found {n} masks:".format(n=len(masks))
+      for name, mask in sorted(masks.items()):
+         print "   {0}:".format(name), mask
+      print "making {n} movies:".format(n=len(movies))
+      for name, movie in sorted(movies.items()):
+         print "   {0}:".format(name), movie
+      print "="*79
+      sys.stdout.flush()
+
+   # Get the list of data files
+   output_list = get_data_list(directory)
+
+   # Summarize outputs list
+   if NProcs > 1:
+      pypar.barrier()
+   for i in xrange(NProcs):
+      if i == ProcID:
+         print "Processor {p} has {n} output files:".format(p=ProcID,
+               n=len(output_list))
+         for o in output_list:
+            print "    {0}".format(o)
+         sys.stdout.flush()
+      if NProcs > 1:
+         pypar.barrier()
+   if ProcID == 0:
+      print "="*79
+
+   # Call the primary loop - - - - - - - - - - - - - - - - - - - - - - - - - -
+   if len(movies) == 0:
+      if ProcID == 0:
+         sys.stdout.write("No movies to generate.\n")
+   else:
+      encode_locations = set()
+      make_all_frames(output_list, movies, encode_locations)
+
+   # Encode the frames to movies - - - - - - - - - - - - - - - - - - - - - - -
+
+   encode_list = assign_movies(encode_locations)
+
    # Summarize movies to encode
    if ProcID == 0:
       print "="*79
@@ -229,28 +336,8 @@ def main():
          sys.stdout.flush()
       if NProcs > 1:
          pypar.barrier()
-   if ProcID == 0:
-      print "="*79
 
-   # Encode the movies
-   for movie_name, frame_regex, fps in encode_list:
-      command = ['mencoder', "mf://"+frame_regex,
-                 '-mf', ":".join(("type=png", "fps={0}".format(fps))),
-                 '-ovc', 'lavc',
-                 '-lavcopts', 'vcodec=mpeg4',
-                 '-oac', 'copy',
-                 '-o', movie_name]
-      sys.stdout.write("Making movie {0}.\n".format(movie_name))
-      try:
-         subprocess.call(command)
-      except OSError as e:
-         if e.errno == os.errno.ENOENT:
-            # Can't find mencoder; warn the user and kill the loop
-            msg = "Cannot locate mencoder to encode frames into movies."
-            warnings.warn(msg, UserWarning)
-            break
-         else:
-            raise
+   encode_movies(encode_list)
 
    if NProcs > 1:
       pypar.barrier()
