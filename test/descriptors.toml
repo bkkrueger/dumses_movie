@@ -1,0 +1,40 @@
+[movies.sample]
+   stub = 'vort'
+   path = 'movies/test/'
+   variable = 'specific z vorticity'
+   mode = 'pseudocolor: full state'
+   window_x_lo = -3.0
+   window_x_hi =  3.0
+   time_lo = 4.9
+   time_hi = 5.1
+   final_pause = '0f'
+   fps = 12
+   image_type = 'png'
+   movie_type = 'avi'
+   xlines = [-0.5, 0.5]
+
+[movies.entr]
+   title = "entropy perturbation"
+   stub = 'entr'
+   path = 'movies/test'
+   variable = 'specific entropy'
+   mode = 'pseudocolor: perturbation'
+   window_x_lo = -2
+   window_x_hi =  2
+   window_y_lo = -3
+   window_y_hi =  3
+   final_pause = '0f'
+   fps = 12
+   image_type = 'png'
+   movie_type = 'avi'
+   masks = ["buoyant"]
+   mask_method = "force low"
+   time_lo = 100
+   time_hi = 200
+
+[masks.buoyant]
+   variable = 'specific entropy'
+   mode = 'pseudocolor: perturbation'
+   operator = '<='
+   threshold = 0
+
