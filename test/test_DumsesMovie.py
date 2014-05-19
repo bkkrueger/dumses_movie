@@ -5,21 +5,18 @@ the most glaring errors.
 """
 
 import unittest
-import copy
 import glob
-import numpy as np
-import os
-import pypar
 import sys
 sys.path.append("..")
 import site_setup
 import DumsesMovie
-import MovieLoops as MLoops
 
 class DumsesMovieTest(unittest.TestCase):
    """
    Test the DumsesMovie module.
    """
+
+   #===========================================================================
 
    def test_process_command_line(self):
       """
@@ -41,6 +38,8 @@ class DumsesMovieTest(unittest.TestCase):
       self.assertSequenceEqual(dfiles, df)
       self.assertSequenceEqual(movies, m)
 
+   #===========================================================================
+
    def test_build_descriptors(self):
       """
       Test the function that builds the mask and movie descriptors
@@ -52,6 +51,8 @@ class DumsesMovieTest(unittest.TestCase):
       self.assertSequenceEqual(masks.keys(), ["buoyant"])
       self.assertSequenceEqual(movies.keys(), ["entr"])
 
+   #===========================================================================
+
    def test_get_data_list(self):
       """
       Test the function that constructs the list of data files.
@@ -62,6 +63,8 @@ class DumsesMovieTest(unittest.TestCase):
       partial_list = DumsesMovie.get_data_list(data_dir)
       self.assertSequenceEqual(partial_list,
             full_list[DumsesMovie.ProcID::DumsesMovie.NProcs])
+
+   #===========================================================================
 
    def test_assign_movies(self):
       """
@@ -76,6 +79,8 @@ class DumsesMovieTest(unittest.TestCase):
          set_in.add(DumsesMovie.ProcID+1)
       list_out = DumsesMovie.assign_movies(set_in)
       self.assertSequenceEqual(list_out, [DumsesMovie.ProcID])
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()

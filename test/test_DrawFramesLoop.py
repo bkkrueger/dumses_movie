@@ -5,9 +5,7 @@ the most glaring errors.
 """
 
 import unittest
-import copy
 import glob
-import numpy as np
 import sys
 sys.path.append("..")
 import site_setup
@@ -18,6 +16,8 @@ class DrawFramesLoopTest(unittest.TestCase):
    """
    Test the draw_frames_loop routine..
    """
+
+   #===========================================================================
 
    def setUp(self):
       """
@@ -45,6 +45,8 @@ class DrawFramesLoopTest(unittest.TestCase):
             self.found_state0 = (state0 is not None)
 
       MovieDescriptor.draw_frame = draw_frame_stub
+
+   #===========================================================================
 
    def test_draw_frames_loop(self):
       """
@@ -194,6 +196,8 @@ class DrawFramesLoopTest(unittest.TestCase):
          movie.assumed_list.append(image_file_name)
       self.assertSequenceEqual(movie.assumed_list, movie.temporary_storage)
       self.assertTrue(movie.found_state0)
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()

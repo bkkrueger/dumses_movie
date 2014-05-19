@@ -18,6 +18,8 @@ class MaskDescriptorTest(unittest.TestCase):
    Test the MaskDescriptor object.
    """
 
+   #===========================================================================
+
    def test_construct(self):
       """
       Make sure we can build a mask.
@@ -42,6 +44,8 @@ class MaskDescriptorTest(unittest.TestCase):
          pdict[k] = bad[k]
          self.assertRaises(DescriptorError, MaskDescriptor, pdict)
 
+   #===========================================================================
+
    def test_apply(self):
       """
       Make sure we can apply a mask.
@@ -49,6 +53,7 @@ class MaskDescriptorTest(unittest.TestCase):
 
       si = SimulationInput("input_allvalues")
 
+      # Build a simple DumsesData-like object
       class A(object):
          pass
       data = A()
@@ -82,14 +87,18 @@ class MaskDescriptorTest(unittest.TestCase):
       eint0 = eint0.reshape((Nx,1,1)).repeat(Ny, axis=1)
       zero0 = np.zeros((Nx, Ny, Nz))
 
+      # Build the simulation state
       ss = SimulationState(data, si)
 
       md = MaskDescriptor({"variable" : "x velocity", "threshold" : 2,
          "operator" : "<="})
 
+      # Apply a mask
       mask = md.apply(ss)
       allow = np.logical_not(mask)
       self.assertEquals(len(ss.extract("entropy")[np.logical_not(mask)]), 2)
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()

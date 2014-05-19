@@ -1,0 +1,239 @@
+# This file outlines the descriptor files used by DumsesMovie.py, including the
+# layout of the file, the allowed options, and the default values.  For more
+# information on the TOML format, see https://github.com/mojombo/toml.
+
+# Here we have the description of a movie -------------------------------------
+
+# All movies should be in square brackets and be specified as movies.<ID>.  The
+# <ID> has no impact on the construction of the movie, but is simply an
+# identifier to allow the user to specify a subset of the movies that are
+# desired.  All movies must have a unique identifier.
+[movies.sample]
+
+   # The title will be printed across the top of each frame.  The default value
+   # will be "<variable> <mode>".  No title can be specified by
+   #     title = ""
+   # In all cases, the time stamp will be printed immediately the title (if
+   # there is any) and above the actual plot.
+   title = "An Awesome Plot!"
+
+   # The stub is used to build the file names of the frames and the final
+   # movie.  The frames will be named "<stub>_######.<image_type>", with the
+   # number taken from the number of the DUMSES output file.  The movie will be
+   # named "<stub>.<movie_type>".  There is no default value for <stub>.
+   stub = "movie"
+
+   # The path defines where the movie will be stored.  The path may be given as
+   # an absolute path, or as a relative path.  If it is given as a relative
+   # path, then it is assumed to be relative to the directory where the DUMSES
+   # data is stored.  The default value is to save the movie in the same
+   # directory where the DUMSES data is stored.  The frames will be generated
+   # in a subdirectory called "frames" relative to where the movie is saved.
+   path = "/path/subpath"
+
+   # The movie type specifies the extension for the movie.  There is no default
+   # value for <movie_type>.
+   movie_type = "avi"
+
+   # The image type specifies the extension for the frame images.  There is no
+   # default value for <image_type>.
+   image_type = "png"
+
+   # The variable specifies what to plot.  The SimulationState class knows a
+   # large collection of variables that it is able to calculate, and new
+   # variables may be added (see below for details).  There is no default value
+   # for <variable>.
+   variable = "density"
+
+   # The mode specifies what transformations or operations to apply to the
+   # variable prior to plotting.  A selection of modes is available.  See the
+   # mode summary at the end of this file for details.  The default value for
+   # <mode> is "pseudocolor: full state".
+   mode = "pseudocolor: full state"
+
+   # The window specifies the coordinate values at which to cut the plot,
+   # enabling zoomed-in movies on small sections of the domain.  The default
+   # behavior for each value is to include the entire domain in that direction.
+   # Window limits are expected as floating-point values (integers will be
+   # converted).
+   window_x_lo = -1.5
+   window_x_hi =  1.5
+   window_y_lo = -1.0
+   window_y_hi =  1.0
+   window_z_lo = -1.0
+   window_z_hi =  1.0
+
+   # The time limits allow the user to only include part of the evolution of
+   # the simulation.  The default behavior is to include the full evolution.
+   # Time limits are expected as floating-point values (integers will be
+   # converted).
+   time_lo = 10.0
+   time_hi = 25.0
+
+   # The value limits allow the user to specify the plotting limits (e.g. if
+   # only low-density regions are of interest, an upper limit could be set by
+   # <value_hi> and all densities above <value_hi> will be truncated down to
+   # <value_hi> to better emphasize the behavior of low densities).  The
+   # default behavior is to set the value limits based on the data.  Value
+   # limits are expected to be floating-point values (integers will be
+   # converted).
+   value_lo = 0.0
+   value_hi = 1.0
+
+   # The <make_movie> flag determines whether to encode the frames into a
+   # movie, or simply to draw the frames (for example, if the movie encoding
+   # software is unavailable on the current system).  If the frames are not
+   # being encoded into a movie ("make_movie = false"), then the frame rate and
+   # movie type are optional.  Note that the TOML format requires booleans to
+   # be lowercase: "true" or "false" rather than Python's "True" or "False".
+   # The default value of <make_movie> is "true".
+   make_movie = true
+
+   # The frame rate is a floating-point value specifying the number of frames
+   # per second.  There is no default value.
+   fps = 24
+
+   # The final pause causes the movie to pause on the final frame for a
+   # specified duration before ending the movie.  It can be specified in two
+   # ways:
+   # 1) an integer value followed by "f" to specify a set number of frames
+   # 2) a floating-point value followed by "s" to specify a set number of
+   #    seconds
+   # The second method rounds up to an integer number of frames based on the
+   # frame rate (and therefore requires the frame rate even if <make_movie> is
+   # false).  The default behavior is not to pause at the end of the movie.
+   final_pause = "12.3s"
+
+   # The <xlines> array allows the user to mark certain x-coordinates with a
+   # dashed line across the domain.  The script will already use solid lines to
+   # mark the extent of the source layer.  The default is to draw no lines
+   # other than the source layer limits.  The values are expected to be
+   # floating-point values, but integers will be converted.  Note that the TOML
+   # format forbids mixed-type arrays, so if any value in <xlines> is a
+   # floating-point, then all must be a floating-point.
+   xlines = [-0.5, 0.0, 0.5]
+
+   # The <masks> array lists the identifiers for a set of masks to be applied
+   # to the movie data.  See the details below regarding the description of
+   # masks.  The default behavior is not to apply any masks.
+   masks = ["upward motion", "buoyant"]
+
+   # The mask method describes how to visualize masked cells.  The allowed
+   # values are:
+   # 1) explicit : masked cells will appear in a unique color
+   # 2) force low : masked cells will appear the same as the minimum value
+   # 3) force high : masked cells will appear in the same as the maximum value
+   # The "force low" method is aware of the special nature of zero in relation
+   # to each variable: for example, x-velocity has both magnitude and
+   # direction, so zero should be the center of the value scale, so "force low"
+   # sets the masked cells to zero; density is non-negative, so zero should be
+   # the lower bound of the value scale and once again "force low" sets the
+   # masked cells to zero; entropy has no special relation to zero, so "force
+   # low" sets the masked cells to the minimum entropy in the plotted data.
+   # The default value of <mask_method> is "explicit".
+   mask_method = "force low"
+
+# Here we have the description of a movie -------------------------------------
+
+# All masks should be in square brackets and be specified as masks.<ID>.  The
+# <ID> has no impact on the construction of the mask, but is simply an
+# identifier to allow the user to specify which masks to apply for a given
+# movie.  All masks must have a unique identifier, although it is permitted for
+# a mask and a movie to have the same identifier.
+[masks.buoyant]
+
+   # The variable specifies what quantity to compare against the mask
+   # threshold.  The set of allowed mask variables is identical to the set of
+   # allowed movie variables.  There is no default value for <variable>.
+   variable = "entropy"
+
+   # The mode specifies what transformations or operations to apply to the
+   # variable prior to masking.  The allowed modes includes the allowed modes
+   # for movies, with the exclusion of "profile: ..." modes.  The default value
+   # for <mode> is "pseudocolor: full state".
+   mode = "pseudocolor: full state"
+
+   # The threshold is the cutoff for when the mask should be applied.  It
+   # should be given as a floating-point value (integers will be converted).
+   # There is no default value for <threshold>.
+   threshold = 0.0
+
+   # The operator specifies which range relative to the threshold should be
+   # masked.  It can be one of four values:
+   # 1) "<" : mask values strictly below <threshold>
+   # 2) "<=" : mask values less than or equal to <threshold>
+   # 3) ">" : mask values strictly above <threshold>
+   # 4) ">=" : mask values greater than or equal to <threshold>
+   # There is no default value for <operator>.
+   operator = ">"
+
+# Available modes -------------------------------------------------------------
+
+# The available modes are:
+# -- "pseudocolor: full state" : 2D slice of the variable
+# -- "pseudocolor: base state" : 2D slice of the initial unperturbed stable
+#     state
+# -- "pseudocolor: mean state" : 2D slice of the horizontally-averaged state
+# -- "pseudocolor: perturbation from base" : 2D slice of the variable minus the
+#     base state
+# -- "pseudocolor: perturbation from mean" : 2D slice of the variable minus the
+#     mean state
+# -- "pseudocolor: absolute perturbation from base" : 2D slice of the absolute
+#     value of the perturbation from base
+# -- "pseudocolor: absolute perturbation from mean" : 2D slice of the absolute
+#     value of the perturbation from mean
+# -- "pseudocolor: contrast from base" : 2D slice of the perturbation from base
+#     scaled by the base state
+# -- "pseudocolor: contrast from mean" : 2D slice of the perturbation from mean
+#     scaled by the mean state
+# -- "pseudocolor: absolute contrast from base" : 2D slice of the absolute
+#     value of the contrast from base
+# -- "pseudocolor: absolute contrast from mean" : 2D slice of the absolute
+#     value of the contrast from mean
+# -- "profile: full state" : 1D profile of the mean state
+# -- "profile: perturbation" : 1D profile of the mean state less the base state
+# -- "profile: contrast" : 1D profile of the perturbation profile scaled by the
+#     base state
+
+# Note that the "profile: ..." modes are not allowed for masks.
+
+# Available variables ---------------------------------------------------------
+
+# The SimulationState class knows a number of variables.  New variables may be
+# added by creating a SimulationVariable and adding it to the
+# SimulationState.known_variables dictionary.  See the code for
+# SimulationVariable and SimulationState for details.
+
+# The standard set of known variables is:
+# -- density | mass density
+# -- x momentum | x momentum density
+# -- y momentum | y momentum density
+# -- z momentum | z momentum density
+# -- momentum magnitude | momentum magnitude density
+# -- x velocity | specific x momentum
+# -- y velocity | specific y momentum
+# -- z velocity | specific z momentum
+# -- velocity magnitude | specific momentum magnitude
+# -- x vorticity
+# -- y vorticity
+# -- z vorticity
+# -- vorticity magnitude
+# -- specific x vorticity
+# -- specific y vorticity
+# -- specific z vorticity
+# -- specific vorticity magnitude
+# -- kinetic energy density
+# -- specific kinetic energy
+# -- total energy density
+# -- specific total energy
+# -- internal energy density
+# -- specific internal energy
+# -- pressure
+# -- entropy | specific entropy
+# -- entropy density
+# -- sound speed
+# -- Mach number
+# -- specific enthalpy
+# -- enthalpy density
+# -- convective growth rate | Brunt-Vaisala frequency
+

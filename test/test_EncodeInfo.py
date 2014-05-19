@@ -5,9 +5,6 @@ the most glaring errors.
 """
 
 import unittest
-import copy
-import glob
-import numpy as np
 import sys
 sys.path.append("..")
 import site_setup
@@ -17,6 +14,8 @@ class EncodeInfoTest(unittest.TestCase):
    """
    Test the EncodeInfo class.
    """
+
+   #===========================================================================
 
    def test_creation(self):
       """
@@ -31,6 +30,8 @@ class EncodeInfoTest(unittest.TestCase):
       self.assertEqual(ei.movie_name, name)
       self.assertEqual(ei.frame_regex, regex)
       self.assertEqual(ei.fps, fps)
+
+   #===========================================================================
 
    def test_equality(self):
       """
@@ -80,6 +81,8 @@ class EncodeInfoTest(unittest.TestCase):
       self.assertFalse(ei1=="no")
       self.assertTrue(ei1!="no")
 
+   #===========================================================================
+
    def test_set(self):
       """
       Test EncodeInfo behavior in sets
@@ -110,6 +113,8 @@ class EncodeInfoTest(unittest.TestCase):
       self.assertEqual(len(s), 4)
       s.add(ei5)  # Equal to 1
       self.assertEqual(len(s), 4)
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()

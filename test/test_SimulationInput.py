@@ -16,6 +16,8 @@ class SimulationInputTest(unittest.TestCase):
    Test the SimulationInput object.
    """
 
+   #===========================================================================
+
    def test_uninitialized(self):
       """
       An uninitialized SimulationInput should raise an error when the
@@ -37,6 +39,8 @@ class SimulationInputTest(unittest.TestCase):
 
       # Gravity shouldn't work because the scaling parameters aren't there
       self.assertRaises(SimulationError, si.gravity, x, y, z)
+
+   #===========================================================================
 
    def test_run_source_functions(self):
       """
@@ -76,6 +80,8 @@ class SimulationInputTest(unittest.TestCase):
                   self.assertAlmostEquals(gravity[i,j,k,0], g[i,j,k])
                   self.assertAlmostEquals(gravity[i,j,k,1], 0)
                   self.assertAlmostEquals(gravity[i,j,k,2], 0)
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()

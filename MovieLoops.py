@@ -8,13 +8,7 @@ Attributes:
    encode_movies_loop : encodes all movies for list of frame sources
 """
 
-import copy
 import errno
-import matplotlib.cm as cm
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import numpy as np
 import os
 import subprocess
 import sys
@@ -30,16 +24,17 @@ class EncodeInfo(object):
    """
    The information necessary to encode a movie.
 
-   This class contains the information necessary to encode a movie.  This is
-   separated out from the MovieDescriptor, because it is an intermediate step
-   in the movie creation process and not part of the movie description.  This
-   is a basic convenience class to encapsulate the information that needs to be
-   communicated between the frame-drawing loop and the movie-encoding loop,
-   with some routines for comparison and hashing to enable the use in sets.
+   This class contains the information necessary to encode a movie.
+   This is separated out from the MovieDescriptor, because it is an
+   intermediate step in the movie creation process and not part of the
+   movie description.  This is a basic convenience class to encapsulate
+   the information that needs to be communicated between the
+   frame-drawing loop and the movie-encoding loop, with some routines
+   for comparison and hashing to enable the use in sets.
 
    Attributes:
-      movie_name (string) : the file name for the movie (including full path)
-      frame_regex (string) : the regex for the frames (including full path)
+      movie_name (string) : file name for the movie (with full path)
+      frame_regex (string) : the regex for the frames (wth full path)
       fps (int) : the frame rate in frames per second
    """
 
@@ -164,7 +159,7 @@ def draw_frames_loop(data_list, movie_list, encode_detail):
          save_initial_state = True
 
       # If any of the movies have absolute paths (allowed in general for the
-      # MovieDescriptor, because it is not tied to this control loop, warn the
+      # MovieDescriptor, because it is not tied to this control loop) warn the
       # user that multiple data series may overwrite or interleave.
       if movie.path is not None and os.path.isabs(movie.path):
          msg = " ".join(("Absolute paths may cause overwriting and/or",
@@ -182,8 +177,8 @@ def draw_frames_loop(data_list, movie_list, encode_detail):
 
    # Master loop - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-   # Loop over each output file first, because loading the files seems to be
-   # one of the bottlenecks.
+   # Loop over each output file first, because loading the files is a
+   # significant bottleneck.
    for output_name in data_list:
 
       # Parse the output_name
@@ -293,13 +288,15 @@ def encode_movies_loop(encode_list):
 
    # Encode the movies
    for ei in encode_list:
+      # Log mencoder's output into a related logfile
       split = os.path.splitext(ei.movie_name)
       if len(split[1]) > 1:
-         split[1] = "_" + split[1][1:]
+         split1 = "_" + split[1][1:]
       else:
-         split[1] = ""
-      log_name = "".join((split[0], split[1], ".log"))
+         split1 = ""
+      log_name = "".join((split[0], split1, ".log"))
       with open(log_name, 'w') as log_file:
+         # Prepare the mencoder command
          command = ['mencoder', "mf://"+ei.frame_regex,
                     '-mf', ":".join(("type=png", "fps={0}".format(ei.fps))),
                     '-ovc', 'lavc',

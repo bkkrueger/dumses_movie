@@ -17,6 +17,8 @@ class SimulationStateTest(unittest.TestCase):
    Test the SimulationState object.
    """
 
+   #===========================================================================
+
    def test_construction(self):
       """
       Test the construction of a SimulationState.
@@ -45,6 +47,8 @@ class SimulationStateTest(unittest.TestCase):
       # Make sure the construction works
       ss = SimulationState(data, si)
 
+   #===========================================================================
+
    def test_uninitialized(self):
       """
       Test thet an uninitialized SimulationData raises an error when
@@ -54,6 +58,8 @@ class SimulationStateTest(unittest.TestCase):
       ss = SimulationState()
 
       self.assertRaises(SimulationError, ss.extract, "density")
+
+   #===========================================================================
 
    def test_variables(self):
       """
@@ -86,12 +92,15 @@ class SimulationStateTest(unittest.TestCase):
       for v in ss.known_variables:
          self.assertSequenceEqual(ss.extract(v).shape, (Nx, Ny, Nz))
 
+   #===========================================================================
+
    def test_calculation(self):
       """
       Ensure the correct relations among the variables.
       """
-      si = SimulationInput("input_allvalues")
 
+      # Build a SimulationState
+      si = SimulationInput("input_allvalues")
       class A(object):
          pass
       data = A()
@@ -362,6 +371,8 @@ class SimulationStateTest(unittest.TestCase):
       self.assertEqual(ss.known_variables["convective growth rate"].zero,
             "lower bound")
 
+   #===========================================================================
+
    def all_nearly_equal(self, npa1, npa2):
       """
       Support function to make sure the data arrays are equal.
@@ -382,6 +393,8 @@ class SimulationStateTest(unittest.TestCase):
       for i in xrange(s1):
          self.assertAlmostEqual(tmp1[i], tmp2[i],
                msg="Mismatching value: ({0}, {1}).".format(tmp1[i], tmp2[i]))
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()

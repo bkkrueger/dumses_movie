@@ -1,10 +1,25 @@
 """
-Driver for making movies.
+Generate movies from DUMSES output.
 
-This parses the command line, does some housekeeping, compiles the
-appropriate descriptors from input files, handles parallelization, and
-does other "outermost loop" tasks of this sort to set up what's
-necessary to run the movie maker.
+This script requires the following information:
+-- The directory where DUMSES data is stored.
+-- A list of files describing the movies to be made and the masks to
+   be used for those movies.
+-- A list of movie IDs to select a subset of the movies defined in
+   the descriptor files.  This is optional; leaving it out assumes
+   that all movies should be made.
+
+The descriptor files are assumed to be in the TOML format
+(https://github.com/mojombo/toml).  Descriptor files are explained in
+more detail in the sample_descriptor.toml file, which lays out the
+expected format, the allowed options, and the defaults.
+
+This script is designed assuming simulations were run with the
+buoyant_layer/v05 patch, but the framework developed here could be
+modified to be less specific without much trouble.  Largely that would
+require the removal of certain modes/options/variables that are
+important to the buoyant_layer/v05 patch, but undefined for more
+general cases.
 """
 
 # Python insists that __future__ import(s) should come first
@@ -18,7 +33,6 @@ except ImportError:
 
 import argparse as ap
 import glob
-import os
 import tomlpython as toml
 import sys
 import warnings
@@ -72,7 +86,7 @@ def process_command_line(argv=None):
 
    # Specify the directory containing the outputs
    parser.add_argument("--dir", metavar="DIR", default="./",
-         help="directory containing DUMSES outputs", required=False,
+         help="directory containing DUMSES data", required=False,
          dest="directory")
 
    # Specify the file describing the movies
@@ -84,6 +98,7 @@ def process_command_line(argv=None):
    parser.add_argument("--movies", metavar="MOVIE", nargs="+",
          dest="movie_list", help="list of IDs of movies to create")
 
+   # Parse the arguments
    args = parser.parse_args(argv)
 
    # Because some components assume that the directory path ends with "/"
@@ -110,38 +125,53 @@ def build_descriptors(dfile_list, movie_list):
       whatever arises from functions called by this routine
    """
 
-   # Get the movie and mask descriptions
+   # Get the movie and mask descriptions - - - - - - - - - - - - - - - - - - -
+
+   # Define some storage
    movie_descriptions = {}
    movie_blacklist = set()
    mask_descriptions = {}
    mask_blacklist = set()
+
+   # Loop over all the descriptor files
    for dfile in dfile_list:
+
+      # Parse the descriptor file
       with open(dfile) as tomlfile:
          d = toml.parse(tomlfile)
-         # Make sure movies are not redundant
-         for k, v in d.get("movies", {}).items():
-            if k in movie_descriptions and k not in movie_blacklist:
-               if ProcID == 0:
-                  msg = '"'.join(('Movie ', k, ' is defined multiple times.  ',
-                     'It will be removed from the list of movies.'))
-                  warnings.warn(msg, UserWarning)
-               movie_blacklist.add(k)
-            else:
-               movie_descriptions[k] = v
-         # Make sure masks are not redundant
-         for k, v in d.get("masks", {}).items():
-            if k in mask_descriptions and k not in mask_blacklist:
-               if ProcID == 0:
-                  msg = '"'.join(('Mask ', k, ' is defined multiple times.  ',
-                     'It will be removed from the list of masks.'))
-                  warnings.warn(msg, UserWarning)
-               mask_blacklist.add(k)
-            else:
-               mask_descriptions[k] = v
+
+      # Make sure movies are not redundant
+      for k, v in d.get("movies", {}).items():
+         if k in movie_descriptions and k not in movie_blacklist:
+            # Redundant and not yet marked, so mark it and warn the user
+            if ProcID == 0:
+               msg = '"'.join(('Movie ', k, ' is defined multiple times.  ',
+                  'It will be removed from the list of movies.'))
+               warnings.warn(msg, UserWarning)
+            movie_blacklist.add(k)
+         else:
+            # Not redundant, so add it
+            movie_descriptions[k] = v
+
+      # Make sure masks are not redundant
+      for k, v in d.get("masks", {}).items():
+         if k in mask_descriptions and k not in mask_blacklist:
+            # Redundant and not yet marked, so mark it and warn the user
+            if ProcID == 0:
+               msg = '"'.join(('Mask ', k, ' is defined multiple times.  ',
+                  'It will be removed from the list of masks.'))
+               warnings.warn(msg, UserWarning)
+            mask_blacklist.add(k)
+         else:
+            # Not redundant, so add it
+            mask_descriptions[k] = v
+
    for k in movie_blacklist:     # Remove redundant movies
       movie_descriptions.pop(k)
    for k in mask_blacklist:      # Remove redundant masks
       mask_descriptions.pop(k)
+
+   # Construct the descriptors - - - - - - - - - - - - - - - - - - - - - - - -
 
    # Construct the mask descriptors
    masks = {}
@@ -149,14 +179,15 @@ def build_descriptors(dfile_list, movie_list):
       masks[name] = Desc.MaskDescriptor(mask_string)
 
    # Construct the movie descriptors
-   # -- If the user specified a list of movies, only make those movies.  Warn
-   #    the user if a requested movies is missing, but continue anyway.
+   # -- If the user specified a list of movies, only make those movies.
    # -- If the user did not specify a list of movies, make all movies described
    #    in the movies file.
    movies = {}
    for name, movie_string in movie_descriptions.items():
       if movie_list is None or name in movie_list:
          movies[name] = Desc.MovieDescriptor(movie_string, masks)
+
+   # If the user request a movie that isn't found, warn the user but continue
    if movie_list is not None:
       for m in movie_list:
          if m not in movies:
@@ -345,6 +376,7 @@ def main():
       print "="*79
    MLoops.encode_movies_loop(encode_list)
 
+   # Clean up - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    if NProcs > 1:
       pypar.barrier()
       pypar.finalize()

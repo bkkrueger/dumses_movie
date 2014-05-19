@@ -16,6 +16,8 @@ class MovieLimitsTest(unittest.TestCase):
    Test the SimulationInput object.
    """
 
+   #===========================================================================
+
    def test_limits(self):
       """
       Make sure the basic functionality of the MovieLimits works.
@@ -44,6 +46,8 @@ class MovieLimitsTest(unittest.TestCase):
       ml.lo = None
       N = len(x[ml.test(x)])
       self.assertEqual(N, 5, msg="High limit failed.")
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()

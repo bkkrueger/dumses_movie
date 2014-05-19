@@ -16,6 +16,8 @@ class ModeDescriptorTest(unittest.TestCase):
    Test the ModeDescriptor object.
    """
 
+   #===========================================================================
+
    def test_construct(self):
       """
       Make sure we can construct the mode.
@@ -53,6 +55,8 @@ class ModeDescriptorTest(unittest.TestCase):
                   else:
                      # Make sure the valid combinations work
                      mm = ModeDescriptor(d, a, t, r)
+
+   #===========================================================================
 
    def test_loop(self):
       """
@@ -110,6 +114,8 @@ class ModeDescriptorTest(unittest.TestCase):
                            msg="Failed to maintain transform.")
                      self.assertEqual(r, mm2.reference,
                            msg="Failed to maintain reference.")
+
+#==============================================================================
 
 if __name__ == "__main__":
    unittest.main()
