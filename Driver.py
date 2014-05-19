@@ -25,7 +25,7 @@ import sys
 import warnings
 
 import Descriptors as Desc
-from MakeFrames import make_all_frames
+from MovieLoops import draw_frames_loop, encode_movies_loop
 
 #==============================================================================
 # Note on PyPar:
@@ -53,6 +53,17 @@ else:
 def process_command_line(argv=None):
    """
    Parse command-line arguments.
+
+   Arguments:
+      argv (list) : list of arguments to parse; if None, then parse sys.argv
+
+   Returns:
+      directory (string) : name of data directory
+      dfile_list (list of strings) : list of descriptor file names
+      movie_list (list of strings) : list of names of movies to make
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
    # Parse command-line arguments - - - - - - - - - - - - - - - - - - - - - - -
@@ -89,6 +100,17 @@ def process_command_line(argv=None):
 def build_descriptors(dfile_list, movie_list):
    """
    Build the mask and movie descriptors.
+
+   Arguments:
+      dfile_list (list of strings) : list of descriptor file names
+      movie_list (list of strings) : list of names of movies to make
+
+   Returns:
+      masks (dict) : {name (from descriptor file) : MaskDescriptor}
+      movies (dict) : {name (from descriptor file) : MovieDescriptor}
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
    # Get the movie and mask descriptions
@@ -151,6 +173,15 @@ def build_descriptors(dfile_list, movie_list):
 def get_data_list(directory):
    """
    Get the list of data files to visualize and distribute across processors.
+
+   Arguments:
+      directory (string) : directory to search for DUMSES output files
+
+   Returns:
+      output_list (list of strings) : names of all output files to visualize
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
    if ProcID == 0:
@@ -178,7 +209,16 @@ def get_data_list(directory):
 
 def assign_movies(encode_locations):
    """
-   Distribute the movies to be encoded among the processors available.
+   Redistribute the movies to be encoded among the processors available.
+
+   Arguments:
+      encode_locations (set) : set of movies to encode
+
+   Returns:
+      encode_list (list) : list of movies to be encoded by local processor
+
+   Exceptions:
+      whatever arises from functions called by this routine
    """
 
    # Merge the set of movies to processor zero
@@ -234,39 +274,6 @@ def assign_movies(encode_locations):
 
 #==============================================================================
 
-# TODO : Does this belong in Driver or in MakeFrames (which would then have to
-#        be renamed)?
-def encode_movies(encode_list):
-   """
-   Encode the movies given.
-   """
-
-   # Encode the movies
-   if ProcID == 0:
-      print "="*79
-   for movie_name, frame_regex, fps in encode_list:
-      log_name = os.path.splitext(movie_name)[0] + ".log"
-      with open(log_name, 'w') as log_file:
-         command = ['mencoder', "mf://"+frame_regex,
-                    '-mf', ":".join(("type=png", "fps={0}".format(fps))),
-                    '-ovc', 'lavc',
-                    '-lavcopts', 'vcodec=mpeg4',
-                    '-oac', 'copy',
-                    '-o', movie_name]
-         sys.stdout.write("Making movie {0}.\n".format(movie_name))
-         try:
-            subprocess.call(command, stdout=log_file, stderr=log_file)
-         except OSError as e:
-            if e.errno == os.errno.ENOENT:
-               # Can't find mencoder; warn the user and kill the loop
-               msg = "Cannot locate mencoder to encode frames into movies."
-               warnings.warn(msg, UserWarning)
-               break
-            else:
-               raise
-
-#==============================================================================
-
 def main():
    """
    Main driver function.
@@ -316,7 +323,7 @@ def main():
          sys.stdout.write("No movies to generate.\n")
    else:
       encode_locations = set()
-      make_all_frames(output_list, movies, encode_locations)
+      draw_frames_loop(output_list, movies, encode_locations)
 
    # Encode the frames to movies - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -337,7 +344,7 @@ def main():
       if NProcs > 1:
          pypar.barrier()
 
-   encode_movies(encode_list)
+   encode_movies_loop(encode_list)
 
    if NProcs > 1:
       pypar.barrier()

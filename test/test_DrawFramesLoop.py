@@ -1,5 +1,5 @@
 """
-This module performs a series of tests on the MakeFrames module.
+This module performs a series of tests on the draw_frames_loop routine.
 It will not be exhaustive, but it should cover basic usage and catch
 the most glaring errors.
 """
@@ -12,11 +12,11 @@ import sys
 sys.path.append("..")
 import site_setup
 from Descriptors import MovieDescriptor
-from MakeFrames import make_all_frames
+from MovieLoops import draw_frames_loop
 
-class MakeFramesTest(unittest.TestCase):
+class DrawFramesLoopTest(unittest.TestCase):
    """
-   Test the MakeFrames module.
+   Test the draw_frames_loop routine..
    """
 
    def setUp(self):
@@ -46,9 +46,9 @@ class MakeFramesTest(unittest.TestCase):
 
       MovieDescriptor.draw_frame = draw_frame_stub
 
-   def test_make_all_frames(self):
+   def test_draw_frames_loop(self):
       """
-      Test the make_all_frames routine, which encapsulates some
+      Test the draw_frames_loop routine, which encapsulates some
       checking/filtering and the main loop.
       """
 
@@ -91,7 +91,9 @@ class MakeFramesTest(unittest.TestCase):
          "path" : "path2",
          "image_type" : "png",
          "variable" : "enthalpy",
-         "make_movie" : False,
+         "make_movie" : True,
+         "movie_type" : "avi",
+         "fps" : 12,
          "masks" : ["mask1", "mask2"]
          }, mask_list)
       movie_list["movie3"] = MovieDescriptor(
@@ -119,11 +121,13 @@ class MakeFramesTest(unittest.TestCase):
 
       # Call the function
       encode_locations = set()
-      make_all_frames(data_list, movie_list, encode_locations)
+      draw_frames_loop(data_list, movie_list, encode_locations)
 
       # Make sure the correct frames were "drawn" (note: the sample data set is
       # known to have output files from 0 to 120, inclusive, with steps of
       # about 2.5s between each)
+
+      encode_expected = set()
 
       # movie 1 collides with movie 4, so it is excluded
       movie = movie_list["movie1"]
@@ -131,7 +135,7 @@ class MakeFramesTest(unittest.TestCase):
       self.assertSequenceEqual(movie.assumed_list, movie.temporary_storage)
       self.assertFalse(movie.found_state0)
 
-      # movie 2
+      # movie 2 is the only one to request the frames be encoded to a movie
       movie = movie_list["movie2"]
       movie.assumed_list = list()
       mp, fp = movie.build_paths(data_dir)
@@ -141,6 +145,10 @@ class MakeFramesTest(unittest.TestCase):
          movie.assumed_list.append(image_file_name)
       self.assertSequenceEqual(movie.assumed_list, movie.temporary_storage)
       self.assertFalse(movie.found_state0)
+      movie_name, frame_regex = movie.build_paths(data_dir)
+      movie_name += ".".join((movie.path, movie.movie_type))
+      frame_regex += "*.".join((movie.stub, movie.image_type))
+      encode_expected.add((movie_name, frame_regex, movie.fps))
 
       # movie 3 only includes t = 99..201s (files 40..80)
       movie = movie_list["movie3"]
@@ -159,6 +167,9 @@ class MakeFramesTest(unittest.TestCase):
       self.assertSequenceEqual(movie.assumed_list, movie.temporary_storage)
       self.assertFalse(movie.found_state0)
 
+      self.assertSequenceEqual(sorted(list(encode_expected)),
+            sorted(list(encode_locations)))
+
       # This pass will test that the initial state is being used for profiles
       movie_list = dict()
       movie_list["movie1"] = MovieDescriptor(
@@ -171,7 +182,7 @@ class MakeFramesTest(unittest.TestCase):
          }, mask_list)
 
       encode_locations = set()
-      make_all_frames(data_list, movie_list, encode_locations)
+      draw_frames_loop(data_list, movie_list, encode_locations)
 
       # movie 1
       movie = movie_list["movie1"]

@@ -4,7 +4,8 @@ Make the frames.
 This module manages the loops and control logic for making the frames.
 
 Attributes:
-   make_all_frames : makes all frames for lists of outputs and movies
+   draw_frames_loop : draws all frames for lists of outputs and movies
+   encode_movies_loop : encodes all movies for list of frame sources
 """
 
 import copy
@@ -24,13 +25,14 @@ from SimulationData import SimulationError, SimulationInput, SimulationState
 
 #==============================================================================
 
-def make_all_frames(data_list, movie_list, encode_locations):
+def draw_frames_loop(data_list, movie_list, encode_locations):
    """
    Makes all frames based on lists of data sources and of movies.
 
    Arguments:
       data_list (list of strings) : list of filenames of DUMSES outputs
       movie_list (list of MovieDescriptors) : list of movies to make
+      encode_locations (set) : set of movies to make (filled by this function)
 
    Returns:
       None
@@ -163,10 +165,10 @@ def make_all_frames(data_list, movie_list, encode_locations):
                # Save the movie and frame information for encoding the frame
                # images into a single movie.
                if movie.make_movie:
-                  mp, fp = movie.build_paths(path)
-                  mp += ".".join((movie.stub, movie.movie_type))
-                  fp += "*.".join((movie.stub, movie.image_type))
-                  encode_locations.add((mp,fp,movie.fps))
+                  movie_name, frame_regex = movie.build_paths(path)
+                  movie_name += ".".join((movie.stub, movie.movie_type))
+                  frame_regex += "*.".join((movie.stub, movie.image_type))
+                  encode_locations.add((movie_name, frame_regex, movie.fps))
             except (DescriptorError, SimulationError) as err:
                # Well that didn't work... guess we'll move along
                msg = "".join(("While generating movie ", str(movie),
@@ -177,6 +179,46 @@ def make_all_frames(data_list, movie_list, encode_locations):
          else:
             sys.stdout.write("Skipping frame {s}_{n:06d} (t = {t}).\n".format(
                   t=state.t, s=movie.stub, n=number))
+
+#==============================================================================
+
+def encode_movies_loop(encode_list):
+   """
+   Encodes all movies specified in the supplied list.
+
+   Arguments:
+      encode_list : list of movies to encode
+
+   Returns:
+      None
+
+   Exceptions:
+      whatever arises from functions called by this routine
+   """
+
+   # Encode the movies
+   if ProcID == 0:
+      print "="*79
+   for movie_name, frame_regex, fps in encode_list:
+      log_name = os.path.splitext(movie_name)[0] + ".log"
+      with open(log_name, 'w') as log_file:
+         command = ['mencoder', "mf://"+frame_regex,
+                    '-mf', ":".join(("type=png", "fps={0}".format(fps))),
+                    '-ovc', 'lavc',
+                    '-lavcopts', 'vcodec=mpeg4',
+                    '-oac', 'copy',
+                    '-o', movie_name]
+         sys.stdout.write("Making movie {0}.\n".format(movie_name))
+         try:
+            subprocess.call(command, stdout=log_file, stderr=log_file)
+         except OSError as e:
+            if e.errno == os.errno.ENOENT:
+               # Can't find mencoder; warn the user and kill the loop
+               msg = "Cannot locate mencoder to encode frames into movies."
+               warnings.warn(msg, UserWarning)
+               break
+            else:
+               raise
 
 #==============================================================================
 
