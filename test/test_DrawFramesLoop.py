@@ -12,7 +12,7 @@ import sys
 sys.path.append("..")
 import site_setup
 from Descriptors import MovieDescriptor
-from MovieLoops import draw_frames_loop
+from MovieLoops import draw_frames_loop, EncodeInfo
 
 class DrawFramesLoopTest(unittest.TestCase):
    """
@@ -146,9 +146,9 @@ class DrawFramesLoopTest(unittest.TestCase):
       self.assertSequenceEqual(movie.assumed_list, movie.temporary_storage)
       self.assertFalse(movie.found_state0)
       movie_name, frame_regex = movie.build_paths(data_dir)
-      movie_name += ".".join((movie.path, movie.movie_type))
+      movie_name += ".".join((movie.stub, movie.movie_type))
       frame_regex += "*.".join((movie.stub, movie.image_type))
-      encode_expected.add((movie_name, frame_regex, movie.fps))
+      encode_expected.add(EncodeInfo(movie_name, frame_regex, movie.fps))
 
       # movie 3 only includes t = 99..201s (files 40..80)
       movie = movie_list["movie3"]

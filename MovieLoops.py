@@ -16,6 +16,7 @@ from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import os
+import subprocess
 import sys
 import warnings
 
@@ -23,16 +24,109 @@ from dumpy_v05.data.rd_dumses import DumsesData
 from Descriptors import DescriptorError
 from SimulationData import SimulationError, SimulationInput, SimulationState
 
+#------------------------------------------------------------------------------
+#==============================================================================
+class EncodeInfo(object):
+   """
+   The information necessary to encode a movie.
+
+   This class contains the information necessary to encode a movie.  This is
+   separated out from the MovieDescriptor, because it is an intermediate step
+   in the movie creation process and not part of the movie description.  This
+   is a basic convenience class to encapsulate the information that needs to be
+   communicated between the frame-drawing loop and the movie-encoding loop,
+   with some routines for comparison and hashing to enable the use in sets.
+
+   Attributes:
+      movie_name (string) : the file name for the movie (including full path)
+      frame_regex (string) : the regex for the frames (including full path)
+      fps (int) : the frame rate in frames per second
+   """
+
+   #===========================================================================
+   def __repr__(self):
+      """
+      Supply a detailed representation of the class.
+      """
+      string = "Encoding information for movie {0}".format(self.movie_name)
+      return string
+
+   #===========================================================================
+   def __str__(self):
+      """
+      Supply a simple representation of the class.
+      """
+      string = "Encoding information for movie {0}".format(self.movie_name)
+      return string
+
+   #===========================================================================
+   def __init__(self, name, regex, fps):
+      """
+      Construct the class.
+
+      Arguments:
+         name (str) : the name of the movie (with full path)
+         regex (str) : the regular expression for the frames (with full path)
+         fps (int) : the frame rate in frames per second
+      """
+
+      self.movie_name = name
+      self.frame_regex = regex
+      self.fps = fps
+
+   #===========================================================================
+   def __hash__(self):
+      """
+      Compute hash value.
+
+      Since tuples and all the components of EncodeInfo are all individually
+      hashable, be lazy and put all the components into a tuple and use
+      Python's built-in hashing routines to take care of this.
+      """
+
+      return hash((self.movie_name, self.frame_regex, self.fps))
+
+   #===========================================================================
+   def __eq__(self, other):
+      """
+      Test equality.
+      """
+
+      try:
+         if self.movie_name != other.movie_name:
+            return False
+         elif self.frame_regex != other.frame_regex:
+            return False
+         elif self.fps != other.fps:
+            return False
+         else:
+            return True
+      except AttributeError:
+         return False
+
+   #===========================================================================
+   def __ne__(self, other):
+      """
+      Test inequality.
+      """
+      return not self == other
+
+# End class EncodeInfo
+#==============================================================================
+#------------------------------------------------------------------------------
+
+
+
 #==============================================================================
 
-def draw_frames_loop(data_list, movie_list, encode_locations):
+def draw_frames_loop(data_list, movie_list, encode_detail):
    """
    Makes all frames based on lists of data sources and of movies.
 
    Arguments:
       data_list (list of strings) : list of filenames of DUMSES outputs
       movie_list (list of MovieDescriptors) : list of movies to make
-      encode_locations (set) : set of movies to make (filled by this function)
+      encode_detail (set) : set of EncodeInfo (filled by this function)
 
    Returns:
       None
@@ -168,7 +262,8 @@ def draw_frames_loop(data_list, movie_list, encode_locations):
                   movie_name, frame_regex = movie.build_paths(path)
                   movie_name += ".".join((movie.stub, movie.movie_type))
                   frame_regex += "*.".join((movie.stub, movie.image_type))
-                  encode_locations.add((movie_name, frame_regex, movie.fps))
+                  encode_detail.add(
+                        EncodeInfo(movie_name, frame_regex, movie.fps))
             except (DescriptorError, SimulationError) as err:
                # Well that didn't work... guess we'll move along
                msg = "".join(("While generating movie ", str(movie),
@@ -187,7 +282,7 @@ def encode_movies_loop(encode_list):
    Encodes all movies specified in the supplied list.
 
    Arguments:
-      encode_list : list of movies to encode
+      encode_list (list of EncodeInfo) : list of movies to encode
 
    Returns:
       None
@@ -197,18 +292,21 @@ def encode_movies_loop(encode_list):
    """
 
    # Encode the movies
-   if ProcID == 0:
-      print "="*79
-   for movie_name, frame_regex, fps in encode_list:
-      log_name = os.path.splitext(movie_name)[0] + ".log"
+   for ei in encode_list:
+      split = os.path.splitext(ei.movie_name)
+      if len(split[1]) > 1:
+         split[1] = "_" + split[1][1:]
+      else:
+         split[1] = ""
+      log_name = "".join((split[0], split[1], ".log"))
       with open(log_name, 'w') as log_file:
-         command = ['mencoder', "mf://"+frame_regex,
-                    '-mf', ":".join(("type=png", "fps={0}".format(fps))),
+         command = ['mencoder', "mf://"+ei.frame_regex,
+                    '-mf', ":".join(("type=png", "fps={0}".format(ei.fps))),
                     '-ovc', 'lavc',
                     '-lavcopts', 'vcodec=mpeg4',
                     '-oac', 'copy',
-                    '-o', movie_name]
-         sys.stdout.write("Making movie {0}.\n".format(movie_name))
+                    '-o', ei.movie_name]
+         sys.stdout.write("Making movie {0}.\n".format(ei.movie_name))
          try:
             subprocess.call(command, stdout=log_file, stderr=log_file)
          except OSError as e:

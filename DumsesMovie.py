@@ -20,24 +20,23 @@ import argparse as ap
 import glob
 import os
 import tomlpython as toml
-import subprocess
 import sys
 import warnings
 
 import Descriptors as Desc
-from MovieLoops import draw_frames_loop, encode_movies_loop
+import MovieLoops as MLoops
 
 #==============================================================================
 # Note on PyPar:
 #    I haven't found much documentation or other information online about this,
 # but it appears that calling certain PyPar functions causes a segmentation
-# fault if this script is launched directly (i.e., "python Driver.py" and not
-# "mpirun -np # python Driver.py").  Fortunately, the size and rank functions
-# work either way.  Because I want this script to be able to run on a single
-# processor (both for users who don't need parallelization and for users who
-# have not installed PyPar), I handle the importing of PyPar as a special case,
-# and all calls to PyPar functions are wrapped in a check that more than one
-# processor exists.
+# fault if this script is launched directly (i.e., "python DumsesMovie.py" and
+# not "mpirun -np # python DumsesMovie.py").  Fortunately, the size and rank
+# functions work either way.  Because I want this script to be able to run on a
+# single processor (both for users who don't need parallelization and for users
+# who have not installed PyPar), I handle the importing of PyPar as a special
+# case, and all calls to PyPar functions are wrapped in a check that more than
+# one processor exists.
 try:
    import pypar
 except ImportError:
@@ -48,6 +47,7 @@ except ImportError:
 else:
    NProcs = pypar.size()
    ProcID = pypar.rank()
+
 #==============================================================================
 
 def process_command_line(argv=None):
@@ -84,10 +84,7 @@ def process_command_line(argv=None):
    parser.add_argument("--movies", metavar="MOVIE", nargs="+",
          dest="movie_list", help="list of IDs of movies to create")
 
-   if argv is None:
-      args = parser.parse_args()
-   else:
-      args = parser.parse_args(argv)
+   args = parser.parse_args(argv)
 
    # Because some components assume that the directory path ends with "/"
    if args.directory[-1] is not "/":
@@ -323,7 +320,7 @@ def main():
          sys.stdout.write("No movies to generate.\n")
    else:
       encode_locations = set()
-      draw_frames_loop(output_list, movies, encode_locations)
+      MLoops.draw_frames_loop(output_list, movies, encode_locations)
 
    # Encode the frames to movies - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -339,12 +336,14 @@ def main():
          print "Processor {p} has {n} movies to encode:".format(p=ProcID,
                n=len(encode_list))
          for o in encode_list:
-            print "    {0}".format(o[0])
+            print "    {0}".format(o.movie_name)
          sys.stdout.flush()
       if NProcs > 1:
          pypar.barrier()
 
-   encode_movies_loop(encode_list)
+   if ProcID == 0:
+      print "="*79
+   MLoops.encode_movies_loop(encode_list)
 
    if NProcs > 1:
       pypar.barrier()
