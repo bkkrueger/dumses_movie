@@ -1,7 +1,5 @@
 """
 This module performs a series of tests on the SimulationInput object.
-It will not be exhaustive, but it should cover basic usage and catch
-the most glaring errors.
 """
 
 import unittest
@@ -42,10 +40,10 @@ class SimulationInputTest(unittest.TestCase):
 
    #===========================================================================
 
-   def test_run_source_functions(self):
+   def test_source_functions(self):
       """
       Initialize the SimulationInput (with and without defaults) and make sure
-      the heating and gravity actually work.
+      the heating and gravity work.
       """
       for input_file_name in ["input_allvalues", "input_novalues"]:
          si = SimulationInput(input_file_name)

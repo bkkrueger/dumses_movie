@@ -1,7 +1,5 @@
 """
 This module performs a series of tests on the EncodeInfo class.
-It will not be exhaustive, but it should cover basic usage and catch
-the most glaring errors.
 """
 
 import unittest

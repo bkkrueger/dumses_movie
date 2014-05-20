@@ -1,7 +1,5 @@
 """
 This module performs a series of tests on the DumsesMovie module.
-It will not be exhaustive, but it should cover basic usage and catch
-the most glaring errors.
 """
 
 import unittest
