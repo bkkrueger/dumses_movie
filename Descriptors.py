@@ -34,6 +34,7 @@ import errno
 import math
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.ticker import MaxNLocator, FuncFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
@@ -376,6 +377,7 @@ class MovieDescriptor(object):
       masks (list of MaskDescriptors) : the masks to be applied
       mask_method (string) : how to apply the masks
       xlines (list of floats) : list of x-positions to mark with lines
+      colormap (string) : select the colormap
    """
 
    #===========================================================================
@@ -549,6 +551,20 @@ class MovieDescriptor(object):
 
       xlines = list(float(x) for x in dictionary.get("xlines", []))
 
+      # Valid values for the colormap are "old", "new", "divergent",
+      # "sequential".  The "old" colormap uses the seismic colormap with green
+      # contours and black masks.  The "new" colormap actually selects between
+      # two colormaps: the divergent and sequential.  The divergent colormap is
+      # used for data where there is a central zero value (e.g., velocities or
+      # perturbations), while the sequential colormap is used for all other
+      # cases (zero is a lower-bound or zero has no special meaning).  The
+      # "divergent" and "sequential" options exist in case the user truly wants
+      # one of them even when the standard behavior would choose the other.
+      # The default is to use the "new" colormap.
+      colormap = dictionary.get("colormap", "new")
+      if colormap not in ["old", "new", "sequential", "divergent"]:
+         raise DescriptorError("colormap", colormap, invalid=True)
+
       # Now that all the values have been verified, save them
       self.title = title
       self.stub = stub
@@ -566,6 +582,7 @@ class MovieDescriptor(object):
       self.masks = masks
       self.mask_method = mask_method
       self.xlines = xlines
+      self.colormap = colormap
 
    #===========================================================================
    def frame_data_3D(self, state):
@@ -763,10 +780,6 @@ class MovieDescriptor(object):
       xx = y[0,:,0]
       yy = x[:,0,0]
 
-      # Construct the desired colormap
-      my_cmap = copy.copy(cm.seismic)
-      my_cmap.set_bad(color="k", alpha=1)
-
       # Split the axes to have space for the colormap
       divider = make_axes_locatable(axes)
       cbar_axes = divider.append_axes("right", size="20%", pad=0.1)
@@ -798,16 +811,84 @@ class MovieDescriptor(object):
       if self.value_limits.hi is not None:
          vhi = self.value_limits.hi
 
+      # Select colormap
+      if self.colormap == "new":
+         if bounds_type == "center":
+            colormap_choice = "divergent"
+         else:
+            colormap_choice = "sequential"
+      else:
+         colormap_choice = self.colormap
+
+      if colormap_choice == "old":
+         cdict = {'red'   : ((0.00, 0.0, 0.0),
+                             (0.25, 0.0, 0.0),
+                             (0.50, 1.0, 1.0),
+                             (0.75, 1.0, 1.0),
+                             (1.00, 0.5, 0.5)),
+                  'green' : ((0.00, 0.0, 0.0),
+                             (0.25, 0.0, 0.0),
+                             (0.50, 1.0, 1.0),
+                             (0.75, 0.0, 0.0),
+                             (1.00, 0.0, 0.0)),
+                  'blue'  : ((0.00, 0.3, 0.3),
+                             (0.25, 1.0, 1.0),
+                             (0.50, 1.0, 1.0),
+                             (0.75, 0.0, 0.0),
+                             (1.00, 0.0, 0.0))
+                 }
+         c_contour = "#00FF00"
+         c_mask    = "#000000"
+      elif colormap_choice == "divergent":
+         cdict = {'red'   : ((0.00, 0.0, 0.0),
+                             (0.30, 0.3, 0.3),
+                             (0.50, 1.0, 1.0),
+                             (0.70, 1.0, 1.0),
+                             (1.00, 0.5, 0.5)),
+                  'green' : ((0.00, 0.0, 0.0),
+                             (0.30, 0.3, 0.3),
+                             (0.50, 1.0, 1.0),
+                             (0.70, 0.3, 0.3),
+                             (1.00, 0.0, 0.0)),
+                  'blue'  : ((0.00, 0.7, 0.7),
+                             (0.30, 1.0, 1.0),
+                             (0.50, 1.0, 1.0),
+                             (0.70, 0.3, 0.3),
+                             (1.00, 0.0, 0.0))
+                 }
+         c_contour = "#000000"
+         c_mask    = "#2F2F2F"
+      elif colormap_choice == "sequential":
+         cdict = {'red'   : ((0.00, 0.0, 0.0),
+                             (0.30, 0.0, 0.0),
+                             (0.70, 1.0, 1.0),
+                             (1.00, 0.5, 0.5)),
+                  'green' : ((0.00, 0.0, 0.0),
+                             (0.30, 0.0, 0.0),
+                             (0.70, 0.0, 0.0),
+                             (1.00, 0.0, 0.0)),
+                  'blue'  : ((0.00, 0.7, 0.7),
+                             (0.30, 1.0, 1.0),
+                             (0.70, 0.0, 0.0),
+                             (1.00, 0.0, 0.0))
+                 }
+         c_contour = "#000000"
+         c_mask    = "#2F2F2F"
+      else:
+         raise DescriptorError("colormap", colormap_choice, invalid=True)
+      my_cmap = LinearSegmentedColormap('custom', cdict)
+      my_cmap.set_bad(color=c_mask, alpha=1)
+
       # Draw the plot
       image = axes.imshow(plot_data,
             extent=[xx.min(), xx.max(), yy.min(), yy.max()],
             aspect=1.0, cmap=my_cmap, vmin=vlo, vmax=vhi)
       axes.contour(xx, yy, x[:,:,0].repeat(y.shape[1],1),
             levels=state.params.layer_width*np.array((-1.0, 1.0)),
-            colors="#00FF00", linestyles="solid")
+            colors=c_contour, linestyles="solid")
       if len(self.xlines) > 0:
          axes.contour(xx, yy, x[:,:,0].repeat(y.shape[1],1),
-               levels=self.xlines, colors="#00FF00",
+               levels=self.xlines, colors=c_contour,
                linestyles="dashed")
       def y_format(x, pos):
          return "{0:>9.2e}".format(x)
